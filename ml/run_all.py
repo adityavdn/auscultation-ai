@@ -3,6 +3,7 @@
 Usage: python -m ml.run_all <data_dir> <out_dir>
 """
 import json
+import os
 import logging
 import shutil
 import subprocess
@@ -28,7 +29,10 @@ URLS = {
 OPERA = "https://raw.githubusercontent.com/evelyn0414/OPERA/main/datasets/icbhi/"
 YASEEN = ("https://github.com/yaseen21khan/Classification-of-Heart-Sound-Signal-Using-Multiple-Features-"
           "/raw/master/{}_New_3%EC%A3%BC%EA%B8%B0.rar")
-ICBHI_ZIP = "https://bhichallenge.med.auth.gr/sites/default/files/ICBHI_final_database/ICBHI_final_database.zip"
+# Official ICBHI site was down (13 Nov 2026): audio from an HF mirror that keeps original filenames,
+# cycle annotations from a public GitHub copy of the official .txt files.
+ICBHI_HF = "https://huggingface.co/datasets/CoughMamba/icbhi/resolve/main/data/train-0000{}-of-00005.parquet"
+ICBHI_TXT_REPO = "https://github.com/Wangfengyi0116/ICBHIdatabase.git"
 SAMPLES_PER_CLASS = 3
 
 
@@ -52,7 +56,7 @@ def _unrar(rar, to):
     to.mkdir(parents=True, exist_ok=True)
     for cmd in (["unrar", "x", "-o+", str(rar), str(to) + "/"], ["7z", "x", "-y", f"-o{to}", str(rar)],
                 ["bsdtar", "-xf", str(rar), "-C", str(to)]):
-        if shutil.which(cmd[0]) and subprocess.run(cmd, capture_output=True).returncode == 0:
+        if shutil.which(cmd[0]) and subprocess.run(cmd, capture_output=True, env=os.environ | {"LC_ALL": "en_US.UTF-8"}).returncode == 0:
             return
     subprocess.run("apt-get install -y -qq unrar-free p7zip-full >/dev/null 2>&1", shell=True)
     subprocess.run(["7z", "x", "-y", f"-o{to}", str(rar)], check=True, capture_output=True)
@@ -61,6 +65,25 @@ def _unrar(rar, to):
 def _find(root, pattern):
     hits = sorted(Path(root).rglob(pattern))
     return hits[0] if hits else None
+
+
+def fetch_icbhi(data):
+    import pyarrow.parquet as pq
+    out = Path(data) / "icbhi"
+    out.mkdir(parents=True, exist_ok=True)
+    if len(list(out.glob("*.wav"))) < 920:
+        for i in range(5):
+            shard = _get(ICBHI_HF.format(i), Path(data) / f"icbhi_{i}.parquet")
+            for row in pq.read_table(shard, columns=["audio"]).to_pylist():
+                (out / Path(row["audio"]["path"]).name).write_bytes(row["audio"]["bytes"])
+            shard.unlink()
+    if len(list(out.glob("*.txt"))) < 920:
+        repo = Path(data) / "icbhi_txt"
+        if not repo.exists():
+            subprocess.run(["git", "clone", "--depth", "1", ICBHI_TXT_REPO, str(repo)], check=True, capture_output=True)
+        for t in (repo / "data").glob("*_*_*_*_*.txt"):
+            shutil.copy(t, out / t.name)
+    return out
 
 
 def fetch_all(data):
@@ -81,9 +104,7 @@ def fetch_all(data):
     paths["icbhi_split"] = _get(OPERA + "ICBHI_challenge_train_test.txt", data / "icbhi_split.txt")
     paths["icbhi_diag"] = _get(OPERA + "ICBHI_Challenge_diagnosis.txt", data / "icbhi_diag.txt")
     wav = _find("/kaggle/input", "101_1b1_Al_sc_Meditron.wav") if Path("/kaggle/input").exists() else None
-    if wav is None:  # not attached as a Kaggle dataset: try the official site
-        wav = _find(_unzip(_get(ICBHI_ZIP, data / "icbhi.zip"), data / "icbhi"), "101_1b1_Al_sc_Meditron.wav")
-    paths["icbhi"] = wav.parent
+    paths["icbhi"] = wav.parent if wav else fetch_icbhi(data)
     return paths
 
 
