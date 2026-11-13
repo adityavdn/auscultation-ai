@@ -7,8 +7,10 @@ import re
 import httpx
 
 log = logging.getLogger("agent")
+GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions"
+GATEWAY_MODEL = os.environ.get("GATEWAY_MODEL", "meta/llama-3.3-70b")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_TURNS = 30
 RED_FLAGS = re.compile(
     r"chest pain|crushing|tight(ness)? (in|across) (my )?chest|can'?t breathe|cannot breathe|"
@@ -37,15 +39,26 @@ class LLMError(RuntimeError):
     pass
 
 
+def _provider():
+    """Vercel AI Gateway (keyless on Vercel via OIDC) first, Groq second, else None."""
+    gw = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_OIDC_TOKEN")
+    if gw:
+        return GATEWAY_URL, gw, GATEWAY_MODEL
+    if os.environ.get("GROQ_API_KEY"):
+        return GROQ_URL, os.environ["GROQ_API_KEY"], GROQ_MODEL
+    return None
+
+
 def _llm(messages, json_mode=False):
-    body = {"model": MODEL, "messages": messages, "temperature": 0.3, "max_tokens": 400}
+    url, key, model = _provider()
+    body = {"model": model, "messages": messages, "temperature": 0.3, "max_tokens": 400}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     try:
-        r = httpx.post(GROQ_URL, json=body, timeout=30,
-                       headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"})
+        r = httpx.post(url, json=body, timeout=30, headers={"Authorization": f"Bearer {key}"})
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        text = r.json()["choices"][0]["message"]["content"]
+        return re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip()) if json_mode else text
     except (httpx.HTTPError, KeyError, ValueError) as e:
         raise LLMError(str(e)) from e
 
@@ -63,7 +76,7 @@ def chat(history, analysis, role):
     last = history[-1]["content"] if history else ""
     if role == "patient" and RED_FLAGS.search(last):
         return {"reply": RED_FLAG_REPLY, "red_flag": True}
-    if not os.environ.get("GROQ_API_KEY"):
+    if _provider() is None:
         return {"reply": UNAVAILABLE, "red_flag": False}
     system = f"{SAFETY}\n{ROLE[role]}\nLatest AI analysis (may be empty): {json.dumps(analysis)[:3000]}"
     try:
@@ -78,7 +91,7 @@ def summarize_case(history, analysis):
     base = {"symptoms": _user_text(history)[:500], "duration": "", "history": "",
             "ai_findings": (analysis or {}).get("summary", "") if isinstance(analysis, dict) else "",
             "urgency": "urgent" if red else "routine"}
-    if os.environ.get("GROQ_API_KEY"):
+    if _provider() is not None:
         try:
             got = json.loads(_llm([{"role": "system", "content": f"{SAFETY}\n{SUMMARY_PROMPT}"},
                                    {"role": "user", "content": json.dumps({"conversation": _clean(history),

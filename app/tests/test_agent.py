@@ -57,3 +57,25 @@ def test_summary_schema(fake_llm):
 def test_summary_red_flag_forces_urgent(fake_llm):
     s = agent.summarize_case([{"role": "user", "content": "I am coughing up blood"}], None)
     assert s["urgency"] == "urgent"
+
+
+def test_provider_prefers_vercel_gateway(monkeypatch):
+    monkeypatch.setenv("VERCEL_OIDC_TOKEN", "oidc")
+    monkeypatch.setenv("GROQ_API_KEY", "groq")
+    url, key, _ = agent._provider()
+    assert "ai-gateway.vercel.sh" in url and key == "oidc"
+
+
+def test_provider_falls_back_to_groq(monkeypatch):
+    for k in ("VERCEL_OIDC_TOKEN", "AI_GATEWAY_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "groq")
+    url, key, _ = agent._provider()
+    assert "groq" in url and key == "groq"
+
+
+def test_no_provider_is_unavailable(monkeypatch):
+    for k in ("VERCEL_OIDC_TOKEN", "AI_GATEWAY_API_KEY", "GROQ_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    assert agent._provider() is None
+    assert "unavailable" in agent.chat([{"role": "user", "content": "hi"}], None, "patient")["reply"].lower()
