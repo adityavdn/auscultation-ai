@@ -50,12 +50,13 @@ def load_audio(src, kind):
 
 
 def windows(x, kind, sr=SR):
-    """Fixed windows; a final partial window is zero-padded if at least half full."""
+    """Fixed windows; a final partial window is zero-padded if at least half full.
+    A recording shorter than half a window still yields one zero-padded window."""
     win, hop = (int(v * sr) for v in WIN[kind])
     out = []
     for start in range(0, max(len(x), 1), hop):
         seg = x[start:start + win]
-        if len(seg) < win / 2:
+        if len(seg) < win / 2 and out:
             break
         out.append(np.pad(seg, (0, win - len(seg))))
         if start + win >= len(x):

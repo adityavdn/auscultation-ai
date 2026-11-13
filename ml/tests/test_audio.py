@@ -44,3 +44,8 @@ def test_stat_features_finite_and_fixed_length():
 
 def test_logmel_shape():
     assert logmel(np.zeros(SR * 5, dtype=np.float32) + 0.01).shape[0] == 64
+
+
+def test_short_recording_still_gives_one_window():
+    w = windows(np.ones(int(2.1 * SR), dtype=np.float32), "heart")
+    assert len(w) == 1 and len(w[0]) == 5 * SR
