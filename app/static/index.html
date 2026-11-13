@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f5f5c">
+<title>Auscultation AI</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="icon.svg" alt="" width="28" height="28"><span>Auscultation AI</span></div>
+  <p class="disclaimer" role="note">Research prototype. Decision support only. Not a medical device.</p>
+</header>
+
+<main>
+  <section id="tab-analyse" class="tab" aria-labelledby="nav-analyse">
+    <div class="slot" data-kind="heart">
+      <h2>Heart sound</h2>
+      <label class="field">Dataset sample
+        <select class="sample"><option value="">Choose a test recording…</option></select>
+      </label>
+      <div class="row">
+        <label class="btn ghost">Upload<input type="file" accept="audio/*,.wav,.webm,.m4a,.mp3" class="upload" hidden></label>
+        <button class="btn ghost rec" type="button">● Record</button>
+        <button class="btn link clear" type="button" hidden>Clear</button>
+      </div>
+      <p class="chosen muted">No recording yet</p>
+    </div>
+    <div class="slot" data-kind="lung">
+      <h2>Lung sound</h2>
+      <label class="field">Dataset sample
+        <select class="sample"><option value="">Choose a test recording…</option></select>
+      </label>
+      <div class="row">
+        <label class="btn ghost">Upload<input type="file" accept="audio/*,.wav,.webm,.m4a,.mp3" class="upload" hidden></label>
+        <button class="btn ghost rec" type="button">● Record</button>
+        <button class="btn link clear" type="button" hidden>Clear</button>
+      </div>
+      <p class="chosen muted">No recording yet</p>
+    </div>
+    <button id="analyse" class="btn primary block" type="button" disabled>Analyse</button>
+    <p id="analyse-status" class="muted center" aria-live="polite"></p>
+    <div id="result"></div>
+  </section>
+
+  <section id="tab-chat" class="tab" hidden aria-labelledby="nav-chat">
+    <div class="role row">
+      <label><input type="radio" name="role" value="patient" checked> Patient</label>
+      <label><input type="radio" name="role" value="doctor"> Doctor</label>
+    </div>
+    <div id="chat-log" class="chat-log" aria-live="polite">
+      <div class="msg bot">Hi. I can explain your sound analysis and ask about your symptoms, then send a summary to the doctor. What's been bothering you?</div>
+    </div>
+    <form id="chat-form" class="chat-form">
+      <input id="chat-input" autocomplete="off" placeholder="Type a message…" aria-label="Message" maxlength="1000">
+      <button class="btn primary" type="submit">Send</button>
+    </form>
+    <label class="field">Your name (optional)<input id="patient-name" maxlength="100" placeholder="Anonymous"></label>
+    <button id="send-summary" class="btn ghost block" type="button">Send summary to doctor</button>
+  </section>
+
+  <section id="tab-inbox" class="tab" hidden aria-labelledby="nav-inbox">
+    <div class="row between"><h2>Doctor inbox</h2><button id="refresh" class="btn link" type="button">Refresh</button></div>
+    <ul id="cases" class="cases"></ul>
+    <div id="case-detail"></div>
+  </section>
+</main>
+
+<nav class="bottom" role="tablist">
+  <button id="nav-analyse" role="tab" aria-selected="true" data-tab="analyse">Analyse</button>
+  <button id="nav-chat" role="tab" aria-selected="false" data-tab="chat">Chat</button>
+  <button id="nav-inbox" role="tab" aria-selected="false" data-tab="inbox">Inbox</button>
+</nav>
+<script src="app.js"></script>
+</body>
+</html>
