@@ -1,0 +1,14 @@
+numpy
+scipy
+librosa
+soundfile
+scikit-learn
+lightgbm
+joblib
+pandas
+matplotlib
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+huggingface_hub
