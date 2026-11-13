@@ -87,3 +87,20 @@ def test_cases_roundtrip(client):
 
 def test_case_bad_urgency_422(client):
     assert client.post("/api/cases", json={"summary": {}, "urgency": "whenever"}).status_code == 422
+
+
+def test_chat_red_flag_endpoint(client):
+    r = client.post("/api/chat", json={"role": "patient", "history": [{"role": "user", "content": "I fainted"}]})
+    assert r.status_code == 200 and r.json()["red_flag"] is True
+
+
+def test_chat_bad_role_422(client):
+    assert client.post("/api/chat", json={"role": "admin", "history": []}).status_code == 422
+
+
+def test_case_from_chat_lands_in_inbox(client, monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    r = client.post("/api/cases/from-chat", json={"patient_name": "A", "history": [
+        {"role": "user", "content": "coughing up blood"}], "analysis": {"summary": "lung sound: crackle"}})
+    assert r.status_code == 200 and r.json()["urgency"] == "urgent"
+    assert client.get("/api/cases").json()[0]["id"] == r.json()["id"]

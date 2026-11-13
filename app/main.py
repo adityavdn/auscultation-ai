@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app import agent
 from app.db import CaseStore
 from app.fusion import fuse
 from app.inference import Analyzer
@@ -27,6 +28,18 @@ class CaseIn(BaseModel):
     summary: dict
     analysis: Optional[dict] = None
     transcript: list = Field(default_factory=list, max_length=200)
+
+
+class ChatIn(BaseModel):
+    role: Literal["patient", "doctor"] = "patient"
+    history: list[dict] = Field(default_factory=list, max_length=100)
+    analysis: Optional[dict] = None
+
+
+class FromChatIn(BaseModel):
+    patient_name: str = Field("Anonymous", max_length=100)
+    history: list[dict] = Field(default_factory=list, max_length=100)
+    analysis: Optional[dict] = None
 
 
 async def _read(upload: UploadFile) -> bytes:
@@ -93,6 +106,15 @@ def create_app(models_dir, samples_dir, db_path):
         if not c:
             raise HTTPException(404, "No such case.")
         return c
+
+    @app.post("/api/chat")
+    def chat(body: ChatIn):
+        return agent.chat(body.history, body.analysis, body.role)
+
+    @app.post("/api/cases/from-chat")
+    def case_from_chat(body: FromChatIn):
+        s = agent.summarize_case(body.history, body.analysis)
+        return cases.add(body.patient_name, s["urgency"], s, body.analysis, body.history)
 
     @app.get("/api/health")
     def health():
