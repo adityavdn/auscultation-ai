@@ -1,0 +1,10 @@
+numpy
+scipy
+librosa
+soundfile
+scikit-learn
+lightgbm
+joblib
+pandas
+matplotlib
+pytest
