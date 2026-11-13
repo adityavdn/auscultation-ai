@@ -1,0 +1,79 @@
+"""Runs the trained heads on one recording and returns per-head results plus a spectrogram."""
+import base64
+import io
+from pathlib import Path
+
+import joblib
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+
+from ml.audio import SR, WIN, load_audio, windows  # noqa: E402
+from ml.features import logmel, stat_features  # noqa: E402
+
+LOW_CONF = 0.6
+CYCLE_WIN = (3.0, 1.5)  # lung_sound was trained on single breath cycles, so score short windows
+PRIMARY = {"heart": ("heart_abnormal", "abnormal"), "lung": ("lung_sound", "normal")}
+
+
+def _cycle_windows(x):
+    win, hop = int(CYCLE_WIN[0] * SR), int(CYCLE_WIN[1] * SR)
+    return [x[s:s + win] for s in range(0, max(len(x) - win, 0) + 1, hop)]
+
+
+def _spectrogram_png(x):
+    fig, ax = plt.subplots(figsize=(6, 2), dpi=100)
+    ax.imshow(logmel(x), origin="lower", aspect="auto", cmap="magma",
+              extent=[0, len(x) / SR, 0, 64])
+    ax.set_xlabel("seconds")
+    ax.set_yticks([])
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+class Analyzer:
+    def __init__(self, models_dir):
+        self.heads = {p.stem: joblib.load(p) for p in sorted(Path(models_dir).glob("*.joblib"))}
+
+    def _head(self, b, X):
+        probs = b["model"].predict_proba(X)
+        mean = probs.mean(0)
+        labels = list(b["labels"])
+        if b.get("positive"):
+            pos = labels.index(b["positive"])
+            neg = 1 - pos
+            label = labels[pos] if mean[pos] >= b["threshold"] else labels[neg]
+            conf = mean[pos] if label == b["positive"] else 1 - mean[pos]
+        else:
+            label, conf = labels[int(mean.argmax())], mean.max()
+        return {"label": label, "confidence": float(conf), "probs": dict(zip(labels, map(float, mean))),
+                "trained_on": b.get("trained_on", ""), "low_confidence": bool(conf < LOW_CONF)}, probs
+
+    def analyze(self, audio, kind):
+        x = load_audio(audio, kind)
+        segs = {"default": windows(x, kind), "cycle": _cycle_windows(x)}
+        feats = {k: np.array([stat_features(w, kind) for w in v]) for k, v in segs.items() if v}
+        heads, per_window = {}, {}
+        for name, b in self.heads.items():
+            if b["kind"] != kind:
+                continue
+            key = "cycle" if name == "lung_sound" and "cycle" in feats else "default"
+            heads[name], per_window[name] = self._head(b, feats[key])
+            per_window[name] = (key, per_window[name])
+        primary, ref = PRIMARY[kind]
+        scores = []
+        if primary in per_window:
+            key, probs = per_window[primary]
+            labels = list(self.heads[primary]["labels"])
+            col = probs[:, labels.index(ref)]
+            abn = col if ref != "normal" else 1 - col
+            win, hop = CYCLE_WIN if key == "cycle" else WIN[kind]
+            scores = [{"start": i * hop, "end": min(i * hop + win, len(x) / SR), "score": float(s)}
+                      for i, s in enumerate(abn)]
+        return {"kind": kind, "duration_s": len(x) / SR, "heads": heads, "window_scores": scores,
+                "spectrogram_png_b64": _spectrogram_png(x)}
