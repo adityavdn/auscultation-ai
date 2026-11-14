@@ -1,4 +1,4 @@
-"""Patient/doctor assistant on a free LLM (Groq). Red flags are caught before any LLM call."""
+"""Patient/doctor assistant on a free LLM (Vercel AI Gateway or Groq). Red flags are caught before any LLM call."""
 import json
 import logging
 import os
@@ -56,7 +56,8 @@ def _llm(messages, json_mode=False):
         body["response_format"] = {"type": "json_object"}
     try:
         r = httpx.post(url, json=body, timeout=30, headers={"Authorization": f"Bearer {key}"})
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise LLMError(f"{r.status_code}: {r.text[:300]}")
         text = r.json()["choices"][0]["message"]["content"]
         return re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip()) if json_mode else text
     except (httpx.HTTPError, KeyError, ValueError) as e:
