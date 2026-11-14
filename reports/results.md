@@ -76,6 +76,18 @@ EfficientNet-B0 (ImageNet weights) fine-tuned on 128-band log-mel spectrograms o
 
 None of these is a meaningful gain, so the live app keeps the LightGBM model, which is smaller and faster. The CNN finds more abnormal cycles but raises more false alarms. Closing the gap to published results (~0.60-0.65) probably needs an audio-pretrained network (e.g. AudioSet) and a GPU.
 
+## Tried and not shipped: AudioSet-pretrained AST embeddings (14 Nov 2026)
+
+The Audio Spectrogram Transformer (`MIT/ast-finetuned-audioset-10-10-0.4593`, frozen) turned each breath cycle, repeat-padded to 8 s, into mean-pooled tokens from layers 4, 8 and 12 (2,304 values). A light head was chosen on 20% of training patients (logistic regression 0.594 vs LightGBM 0.585 on validation), refit on all training patients, and scored once on the official test split.
+
+| Model | ICBHI score | Sensitivity | Specificity |
+|---|---|---|---|
+| LightGBM on hand-made features (live) | 0.508 | 0.288 | 0.729 |
+| AST embeddings + logistic regression, float32 | **0.533** | 0.504 | 0.561 |
+| Same head, AST quantised to int8 (dynamic) | 0.502 | 0.475 | 0.528 |
+
+Float32 AST is the best lung model so far: it finds far more abnormal cycles at the cost of more false alarms. It is not live because it is slow on a CPU server: about 2.3 s per 3 s window in float32 and 0.7 s in int8 on an Apple M3, so one lung recording would take 8 to 28 s. Dynamic int8 loses the gain; per-channel int8 agrees with float32 on 97.5% of training cycles but is no faster. The code path is in place (`ml/run_lung_ast.py`, `ml/ast_fbank.py`, and the `embedder` role in `app/inference.py`), so it can be switched on when a GPU or a faster CPU is available.
+
 ## Caveats
 
 - CinC 2016 and Yaseen publish no patient IDs, so each recording is treated as its own patient.

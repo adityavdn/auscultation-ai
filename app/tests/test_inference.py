@@ -75,3 +75,54 @@ def test_onnx_lung_sound_head_replaces_joblib(models_dir, tmp_path):
     h = r["heads"]["lung_sound"]
     assert set(h["probs"]) == set(labels) and h["trained_on"] == "icbhi"
     assert abs(sum(h["probs"].values()) - 1) < 1e-4 and r["window_scores"]
+
+
+def _tiny_embedder(path, dim=8):
+    """Torch-free stand-in for the exported AST embedder: fbank (n, 1024, 128) -> mean over time -> linear."""
+    import numpy as np
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+    w = numpy_helper.from_array(np.random.default_rng(1).normal(0, 0.1, (128, dim)).astype("float32"), "w")
+    g = helper.make_graph(
+        [helper.make_node("ReduceMean", ["fbank", "axes"], ["pooled"], keepdims=0),
+         helper.make_node("MatMul", ["pooled", "w"], ["emb"])],
+        "tiny_ast", [helper.make_tensor_value_info("fbank", TensorProto.FLOAT, ["n", 1024, 128])],
+        [helper.make_tensor_value_info("emb", TensorProto.FLOAT, ["n", dim])],
+        [w, numpy_helper.from_array(np.array([1], dtype="int64"), "axes")])
+    onnx.save(helper.make_model(g, opset_imports=[helper.make_opsetid("", 18)]), str(path))
+
+
+def _ast_models(models_dir, tmp_path, labels):
+    import json
+    import shutil
+    import joblib
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+    d = tmp_path / "m"
+    shutil.copytree(models_dir, d)
+    _tiny_embedder(d / "lung_sound_ast.onnx")
+    rng = np.random.default_rng(0)
+    X, y = rng.normal(size=(40, 8)), [labels[i % len(labels)] for i in range(40)]
+    joblib.dump({"model": LogisticRegression(max_iter=500).fit(X, y), "labels": labels, "kind": "lung",
+                 "threshold": None, "positive": None, "trained_on": "icbhi"}, d / "lung_sound_ast.head")
+    (d / "lung_sound_ast.onnx.json").write_text(json.dumps(
+        {"role": "embedder", "for": "lung_sound", "head": "lung_sound_ast.head"}))
+    return d
+
+
+def test_ast_embedder_head_replaces_joblib(models_dir, tmp_path):
+    labels = ["both", "crackle", "normal", "wheeze"]
+    a = Analyzer(_ast_models(models_dir, tmp_path, labels))
+    assert "lung_sound_ast" not in a.heads
+    r = a.analyze(wav_bytes(tone(600, 10)), "lung")
+    h = r["heads"]["lung_sound"]
+    assert set(h["probs"]) == set(labels) and h["trained_on"] == "icbhi"
+    assert r["window_scores"]
+
+
+def test_ast_head_scores_at_most_twelve_windows(models_dir, tmp_path):
+    a = Analyzer(_ast_models(models_dir, tmp_path, ["crackle", "normal"]))
+    r = a.analyze(wav_bytes(tone(600, 60)), "lung")
+    s = r["window_scores"]
+    assert 2 <= len(s) <= 12
+    assert s[-1]["end"] <= 60 + 1e-6

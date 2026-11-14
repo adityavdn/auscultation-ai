@@ -11,3 +11,4 @@ pytest
 torch
 torchvision
 onnx
+transformers==4.57.1

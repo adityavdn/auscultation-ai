@@ -1,5 +1,9 @@
 """Tiny synthetic models with the real head names, so app tests run without Kaggle output."""
 import io
+import os
+
+# The server image has no torch; keep transformers from importing it here (torch beside joblib hangs).
+os.environ.setdefault("USE_TORCH", "0")
 
 import numpy as np
 import pandas as pd
