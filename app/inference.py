@@ -38,7 +38,8 @@ def _spectrogram_png(x):
 
 class Analyzer:
     def __init__(self, models_dir):
-        self.heads = {p.stem: joblib.load(p) for p in sorted(Path(models_dir).glob("*.joblib"))}
+        self.heads = {p.stem: joblib.load(p) for p in sorted(Path(models_dir).glob("*.joblib"))
+                      if not p.name.startswith(".")}
 
     def _head(self, b, X):
         probs = b["model"].predict_proba(X)

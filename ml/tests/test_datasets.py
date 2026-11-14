@@ -74,5 +74,6 @@ def test_lung_diagnosis_merges_icbhi_and_kauh(tmp_path):
         _touch(ka / f"EP{i}_{d},I E W,P L R,70,M.wav")
     df = D.load_lung_diagnosis(ic, tmp_path / "diag.txt", ka)
     _no_leak(df)
-    assert {"urti", "healthy", "copd", "asthma", "heart_failure", "pneumonia"} <= set(df.label)
+    assert set(df.label) <= {"healthy", "copd", "asthma", "heart_failure", "infection", "other"}
+    assert {"infection", "healthy", "copd", "asthma", "heart_failure"} <= set(df.label)
     assert df[df.path.str.contains("BP1_")].patient_id.iloc[0] == df[df.path.str.contains("EP1_")].patient_id.iloc[0]

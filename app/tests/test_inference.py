@@ -14,3 +14,11 @@ def test_lung_analysis_labels(models_dir):
     r = Analyzer(models_dir).analyze(wav_bytes(tone(600, 10)), "lung")
     assert r["heads"]["lung_diagnosis"]["label"] == "copd"
     assert set(r["heads"]["lung_sound"]["probs"]) == {"normal", "crackle"}
+
+
+def test_hidden_metadata_files_are_ignored(models_dir, tmp_path):
+    import shutil
+    d = tmp_path / "m"
+    shutil.copytree(models_dir, d)
+    (d / "._heart_abnormal.joblib").write_bytes(b"\x00\x05\x16\x07macOS metadata")
+    assert "._heart_abnormal" not in Analyzer(d).heads

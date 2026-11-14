@@ -10,11 +10,13 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 SEED = 42
 YASEEN = {"N": "normal", "AS": "AS", "MS": "MS", "MR": "MR", "MVP": "MVP"}
+# Diagnoses grouped into clinically coherent classes: several raw labels have only 1-6 patients,
+# too few to learn or to evaluate on their own.
 DIAG_MAP = {
     "healthy": "healthy", "n": "healthy", "normal": "healthy",
-    "copd": "copd", "pneumonia": "pneumonia", "urti": "urti", "lrti": "lrti",
-    "bronchiectasis": "bronchiectasis", "bronchiolitis": "bronchiolitis",
-    "asthma": "asthma", "heart failure": "heart_failure",
+    "copd": "copd", "asthma": "asthma", "heart failure": "heart_failure",
+    "pneumonia": "infection", "urti": "infection", "lrti": "infection", "bronchiolitis": "infection",
+    "bronchiectasis": "other",
 }
 
 

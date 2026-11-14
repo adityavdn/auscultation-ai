@@ -10,7 +10,7 @@ All test sets are held out **by patient**: no patient appears in both training a
 | heart_murmur | CirCor DigiScope 2022, murmur present vs absent (children) | MAcc | 0.724 | 0.689 | 602 (175) | Challenge murmur task: top weighted accuracy ~0.78 (different metric) |
 | heart_valve | Yaseen 2018, Normal/AS/MS/MR/MVP | Accuracy | 1.000 | 1.000 | 200 (200) | Paper reports ~97%; dataset is small and clean, so scores flatter real use |
 | lung_sound | ICBHI 2017, per breath cycle: normal/crackle/wheeze/both (official 60/40 split) | ICBHI score | 0.507 | 0.370 | 2756 (49) | Published state of the art ~0.60-0.65 ICBHI score |
-| lung_diagnosis | ICBHI 2017 + KAUH 2021, patient diagnosis per recording | Macro-F1 | 0.215 | 0.215 | 252 (49) | No single standard benchmark; ICBHI is ~86% COPD, so macro-F1 is the honest number |
+| lung_diagnosis | ICBHI 2017 + KAUH 2021, patient diagnosis per recording | Macro-F1 | 0.433 | 0.433 | 252 (49) | No single standard benchmark; ICBHI is ~86% COPD, so macro-F1 is the honest number |
 
 ## heart_abnormal: confusion matrix (rows = truth, columns = prediction)
 
@@ -49,18 +49,14 @@ Sensitivity 0.285, specificity 0.730.
 
 ## lung_diagnosis: confusion matrix (rows = truth, columns = prediction)
 
-| | asthma | bronchiectasis | bronchiolitis | copd | healthy | heart_failure | lrti | other | pneumonia | urti |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **asthma** | 9 | 0 | 0 | 1 | 6 | 1 | 0 | 1 | 0 | 0 |
-| **bronchiectasis** | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **bronchiolitis** | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **copd** | 1 | 0 | 0 | 158 | 5 | 0 | 0 | 0 | 0 | 0 |
-| **healthy** | 4 | 0 | 0 | 4 | 19 | 0 | 0 | 0 | 0 | 1 |
-| **heart_failure** | 1 | 0 | 0 | 0 | 10 | 0 | 0 | 1 | 0 | 0 |
-| **lrti** | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| **other** | 3 | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 | 0 |
-| **pneumonia** | 2 | 0 | 0 | 9 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **urti** | 0 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 1 |
+| | asthma | copd | healthy | heart_failure | infection | other |
+|---|---|---|---|---|---|---|
+| **asthma** | 10 | 6 | 1 | 2 | 0 | 0 |
+| **copd** | 0 | 158 | 3 | 0 | 3 | 0 |
+| **healthy** | 2 | 5 | 20 | 0 | 1 | 0 |
+| **heart_failure** | 6 | 0 | 5 | 1 | 0 | 0 |
+| **infection** | 3 | 6 | 3 | 0 | 6 | 0 |
+| **other** | 1 | 7 | 3 | 0 | 0 | 0 |
 
 ## Robustness
 
