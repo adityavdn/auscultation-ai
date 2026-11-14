@@ -17,7 +17,31 @@ const HEAD_NAMES = {
   lung_sound: "Adventitious sounds", lung_diagnosis: "Likely condition",
 };
 
+const passcode = () => { try { return sessionStorage.getItem("doctorPasscode") || ""; } catch { return ""; } };
+const MAX_UPLOAD = 3.5 * 1024 * 1024; // host rejects bodies over ~4.5 MB
+
+// Large recordings are re-encoded in the browser as 4 kHz mono 16-bit WAV (what the models use anyway).
+async function shrink(blob) {
+  if (blob.size <= MAX_UPLOAD) return blob;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const decoded = await new AC().decodeAudioData(await blob.arrayBuffer());
+  const secs = Math.min(decoded.duration, 120);
+  const off = new OfflineAudioContext(1, Math.ceil(secs * 4000), 4000);
+  const src = off.createBufferSource();
+  src.buffer = decoded; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const str = (o, t) => [...t].forEach((c, i) => view.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); view.setUint32(4, 36 + pcm.length * 2, true); str(8, "WAVEfmt ");
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, 4000, true); view.setUint32(28, 8000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  str(36, "data"); view.setUint32(40, pcm.length * 2, true);
+  pcm.forEach((v, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, v)) * 32767, true));
+  return new Blob([view], { type: "audio/wav" });
+}
+
 async function api(path, opts = {}) {
+  if (path.startsWith("/api/cases") && (opts.method || "GET") === "GET") opts.headers = { ...opts.headers, "x-doctor-passcode": passcode() };
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.detail ? (typeof body.detail === "string" ? body.detail : "Invalid request") : `Error ${r.status}`);
@@ -89,12 +113,17 @@ document.querySelectorAll(".slot").forEach((slot) => {
 });
 
 $("#analyse").addEventListener("click", async () => {
-  const fd = new FormData();
-  for (const k of ["heart", "lung"]) if (chosen[k]) fd.append(k, chosen[k].blob, chosen[k].name.replace(/[^\w.-]/g, "_") + (chosen[k].blob.type.includes("webm") ? ".webm" : ""));
   const status = $("#analyse-status");
   status.textContent = "Analysing… (first request after idle can take ~30 s)";
   $("#analyse").disabled = true;
   try {
+    const fd = new FormData();
+    for (const k of ["heart", "lung"]) {
+      if (!chosen[k]) continue;
+      const blob = await shrink(chosen[k].blob).catch(() => chosen[k].blob);
+      if (blob.size > MAX_UPLOAD) throw new Error("Recording is too large; keep it under 2 minutes.");
+      fd.append(k, blob, chosen[k].name.replace(/[^\w.-]/g, "_") + (blob.type.includes("webm") ? ".webm" : blob.type.includes("wav") ? ".wav" : ""));
+    }
     lastAnalysis = await api("/api/analyze/combined", { method: "POST", body: fd });
     status.textContent = "";
     renderResult(lastAnalysis);
@@ -189,7 +218,11 @@ $("#send-summary").addEventListener("click", async (e) => {
 async function loadCases() {
   const list = $("#cases");
   try {
-    const cases = await api("/api/cases");
+    const r = await fetch("/api/cases", { headers: { "x-doctor-passcode": passcode() } });
+    $("#passcode-form").hidden = r.status !== 401;
+    if (r.status === 401) { list.replaceChildren(el("li", { class: "muted", text: "Enter the doctor passcode to view cases." })); return; }
+    if (!r.ok) throw new Error(`Error ${r.status}`);
+    const cases = await r.json();
     list.replaceChildren(...(cases.length ? cases.map((c) => el("li", {}, el("button", { type: "button", onclick: () => showCase(c) },
       el("span", { class: `badge ${c.urgency}`, text: c.urgency }),
       el("strong", { text: c.patient_name }), el("br"),
@@ -209,6 +242,11 @@ function showCase(c) {
   $("#case-detail").scrollIntoView({ behavior: "smooth" });
 }
 $("#refresh").addEventListener("click", loadCases);
+$("#passcode-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  try { sessionStorage.setItem("doctorPasscode", $("#passcode").value); } catch { /* private mode */ }
+  loadCases();
+});
 
 loadSamples();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

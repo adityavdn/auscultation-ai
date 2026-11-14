@@ -59,11 +59,16 @@
       <button class="btn primary" type="submit">Send</button>
     </form>
     <label class="field">Your name (optional)<input id="patient-name" maxlength="100" placeholder="Anonymous"></label>
+    <p class="muted">Demo only: don't enter real names or personal health details.</p>
     <button id="send-summary" class="btn ghost block" type="button">Send summary to doctor</button>
   </section>
 
   <section id="tab-inbox" class="tab" hidden aria-labelledby="nav-inbox">
     <div class="row between"><h2>Doctor inbox</h2><button id="refresh" class="btn link" type="button">Refresh</button></div>
+    <form id="passcode-form" class="chat-form" hidden>
+      <input id="passcode" type="password" autocomplete="current-password" placeholder="Doctor passcode" aria-label="Doctor passcode">
+      <button class="btn primary" type="submit">Open inbox</button>
+    </form>
     <ul id="cases" class="cases"></ul>
     <div id="case-detail"></div>
   </section>
