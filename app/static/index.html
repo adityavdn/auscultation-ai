@@ -3,82 +3,194 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f5f5c">
+<meta name="theme-color" content="#070b12">
+<meta name="description" content="Research prototype: AI analysis of heart and lung stethoscope sounds, with patient intake and a doctor inbox. Not a medical device.">
 <title>Auscultation AI</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/lenis@1.3.27/dist/lenis.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand"><img src="icon.svg" alt="" width="28" height="28"><span>Auscultation AI</span></div>
-  <p class="disclaimer" role="note">Research prototype. Decision support only. Not a medical device.</p>
+<canvas id="bg" aria-hidden="true"></canvas>
+<a class="skip" href="#app">Skip to the demo</a>
+
+<header class="nav">
+  <a class="brand" href="#top" aria-label="Auscultation AI, back to top"><img src="icon.svg" alt="" width="26" height="26"><span>Auscultation AI</span></a>
+  <nav class="links" aria-label="Sections">
+    <a href="#how">How it works</a><a href="#app">Try it</a><a href="#results">Results</a><a href="#roadmap">Roadmap</a>
+  </nav>
+  <a class="btn glass small" href="https://github.com/adityavdn/auscultation-ai" rel="noopener">
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+    GitHub
+  </a>
 </header>
 
-<main>
-  <section id="tab-analyse" class="tab" aria-labelledby="nav-analyse">
-    <div class="slot" data-kind="heart">
-      <h2>Heart sound</h2>
-      <label class="field">Dataset sample
-        <select class="sample"><option value="">Choose a test recording…</option></select>
-      </label>
-      <div class="row">
-        <label class="btn ghost">Upload<input type="file" accept="audio/*,.wav,.webm,.m4a,.mp3" class="upload" hidden></label>
-        <button class="btn ghost rec" type="button">● Record</button>
-        <button class="btn link clear" type="button" hidden>Clear</button>
+<main id="top">
+  <section class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow"><span class="dot heart-dot"></span>Heart <span class="dot lung-dot"></span>Lungs · research prototype</p>
+      <h1><span class="line-wrap"><span class="line">Hear the heart and lungs</span></span><span class="line-wrap"><span class="line">as one picture.</span></span></h1>
+      <p class="lead">Upload or record a stethoscope sound. Five models trained on public data say whether it sounds normal, name the likely pattern, and pass a short patient summary to a doctor.</p>
+      <div class="cta">
+        <a class="btn primary" href="#app">Try the demo</a>
+        <a class="btn glass" href="#how">How it works</a>
       </div>
-      <p class="chosen muted">No recording yet</p>
+      <ul class="stats" aria-label="Key facts">
+        <li><b>5</b> models</li><li><b>5</b> public datasets</li><li><b>1.6 s</b> median reply</li><li><b>32/34</b> live samples agree</li>
+      </ul>
     </div>
-    <div class="slot" data-kind="lung">
-      <h2>Lung sound</h2>
-      <label class="field">Dataset sample
-        <select class="sample"><option value="">Choose a test recording…</option></select>
-      </label>
-      <div class="row">
-        <label class="btn ghost">Upload<input type="file" accept="audio/*,.wav,.webm,.m4a,.mp3" class="upload" hidden></label>
-        <button class="btn ghost rec" type="button">● Record</button>
-        <button class="btn link clear" type="button" hidden>Clear</button>
-      </div>
-      <p class="chosen muted">No recording yet</p>
-    </div>
-    <button id="analyse" class="btn primary block" type="button" disabled>Analyse</button>
-    <p id="analyse-status" class="muted center" aria-live="polite"></p>
-    <div id="result"></div>
+    <p class="note" role="note">Decision support only. Not a medical device. Never use it for a real patient decision.</p>
   </section>
 
-  <section id="tab-chat" class="tab" hidden aria-labelledby="nav-chat">
-    <div class="role row">
-      <label><input type="radio" name="role" value="patient" checked> Patient</label>
-      <label><input type="radio" name="role" value="doctor"> Doctor</label>
+  <section id="how" class="section">
+    <div class="wrap">
+      <p class="kicker" data-reveal>How it works</p>
+      <h2 data-reveal>From stethoscope to doctor in four steps.</h2>
+      <ol class="steps">
+        <li class="step"><span class="num">01</span>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v6a5 5 0 0 0 10 0V3M5 3H3m2 0h2m8 0h-2m2 0h2M10 14v2a5 5 0 0 0 10 0v-3"/><circle cx="20" cy="11" r="2"/></svg>
+          <h3>Record</h3><p>Pick a held-out dataset sample, upload a file, or record with the phone microphone. Large files shrink to 4 kHz on the phone.</p></li>
+        <li class="step"><span class="num">02</span>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6l8-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+          <h3>Check</h3><p>Too short, clipped or silent audio is rejected. An IsolationForest turns away sound that is not from a stethoscope.</p></li>
+        <li class="step"><span class="num">03</span>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+          <h3>Analyse</h3><p>Five LightGBM heads score heart and lung windows. Rules join them: murmur with crackles suggests checking for heart failure.</p></li>
+        <li class="step"><span class="num">04</span>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4V5z"/><path d="M8 10h8M8 13h5"/></svg>
+          <h3>Hand off</h3><p>Four intake questions, an emergency check that points to 999 or 111, then a summary lands in the doctor's passcode inbox.</p></li>
+      </ol>
+
+      <div class="figures">
+        <figure class="fig wide" data-reveal>
+          <div class="frame"><iframe src="figures/architecture.html" title="Interactive architecture diagram" loading="lazy"></iframe></div>
+          <figcaption>Live architecture. <a href="figures/architecture.html" target="_blank" rel="noopener">Open full size</a></figcaption>
+        </figure>
+        <figure class="fig gauge" data-reveal>
+          <div class="frame"><iframe src="figures/confidence-gauge.html" title="Confidence gauge figure" loading="lazy"></iframe></div>
+          <figcaption>How a score becomes a call: abnormal only at 0.60 or more. <a href="figures/confidence-gauge.html" target="_blank" rel="noopener">Open full size</a></figcaption>
+        </figure>
+      </div>
     </div>
-    <div id="chat-log" class="chat-log" aria-live="polite">
-      <div class="msg bot">Hi. I can explain your sound analysis and ask about your symptoms, then send a summary to the doctor. What's been bothering you?</div>
-    </div>
-    <form id="chat-form" class="chat-form">
-      <input id="chat-input" autocomplete="off" placeholder="Type a message…" aria-label="Message" maxlength="1000">
-      <button class="btn primary" type="submit">Send</button>
-    </form>
-    <label class="field">Your name (optional)<input id="patient-name" maxlength="100" placeholder="Anonymous"></label>
-    <p class="muted">Demo only: don't enter real names or personal health details.</p>
-    <button id="send-summary" class="btn ghost block" type="button">Send summary to doctor</button>
   </section>
 
-  <section id="tab-inbox" class="tab" hidden aria-labelledby="nav-inbox">
-    <div class="row between"><h2>Doctor inbox</h2><button id="refresh" class="btn link" type="button">Refresh</button></div>
-    <form id="passcode-form" class="chat-form" hidden>
-      <input id="passcode" type="password" autocomplete="current-password" placeholder="Doctor passcode" aria-label="Doctor passcode">
-      <button class="btn primary" type="submit">Open inbox</button>
-    </form>
-    <ul id="cases" class="cases"></ul>
-    <div id="case-detail"></div>
+  <section id="app" class="section">
+    <div class="wrap">
+      <p class="kicker" data-reveal>Try it</p>
+      <h2 data-reveal>Listen, check, hand off.</h2>
+      <div class="app-card">
+        <nav class="tabs" role="tablist" aria-label="Demo">
+          <button id="nav-analyse" role="tab" aria-selected="true" data-tab="analyse">Analyse</button>
+          <button id="nav-chat" role="tab" aria-selected="false" data-tab="chat">Chat</button>
+          <button id="nav-inbox" role="tab" aria-selected="false" data-tab="inbox">Inbox</button>
+        </nav>
+
+        <section id="tab-analyse" class="tab" aria-labelledby="nav-analyse">
+          <div class="slots">
+            <div class="slot" data-kind="heart">
+              <h3><span class="dot heart-dot"></span>Heart sound</h3>
+              <label class="field">Dataset sample
+                <select class="sample"><option value="">Choose a test recording…</option></select>
+              </label>
+              <div class="row">
+                <label class="btn glass">Upload<input type="file" accept="audio/*,.wav,.webm,.m4a,.mp3" class="upload" hidden></label>
+                <button class="btn glass rec" type="button">● Record</button>
+                <button class="btn link clear" type="button" hidden>Clear</button>
+              </div>
+              <p class="chosen muted">No recording yet</p>
+            </div>
+            <div class="slot" data-kind="lung">
+              <h3><span class="dot lung-dot"></span>Lung sound</h3>
+              <label class="field">Dataset sample
+                <select class="sample"><option value="">Choose a test recording…</option></select>
+              </label>
+              <div class="row">
+                <label class="btn glass">Upload<input type="file" accept="audio/*,.wav,.webm,.m4a,.mp3" class="upload" hidden></label>
+                <button class="btn glass rec" type="button">● Record</button>
+                <button class="btn link clear" type="button" hidden>Clear</button>
+              </div>
+              <p class="chosen muted">No recording yet</p>
+            </div>
+          </div>
+          <button id="analyse" class="btn primary block" type="button" disabled>Analyse</button>
+          <p id="analyse-status" class="muted center" aria-live="polite"></p>
+          <div id="result"></div>
+        </section>
+
+        <section id="tab-chat" class="tab" hidden aria-labelledby="nav-chat">
+          <div class="role row">
+            <label><input type="radio" name="role" value="patient" checked> Patient</label>
+            <label><input type="radio" name="role" value="doctor"> Doctor</label>
+          </div>
+          <div id="chat-log" class="chat-log" aria-live="polite">
+            <div class="msg bot">Hi. I can explain your sound analysis and ask about your symptoms, then send a summary to the doctor. What's been bothering you?</div>
+          </div>
+          <form id="chat-form" class="chat-form">
+            <input id="chat-input" autocomplete="off" placeholder="Type a message…" aria-label="Message" maxlength="1000">
+            <button class="btn primary" type="submit">Send</button>
+          </form>
+          <label class="field">Your name (optional)<input id="patient-name" maxlength="100" placeholder="Anonymous"></label>
+          <p class="muted">Demo only: don't enter real names or personal health details.</p>
+          <button id="send-summary" class="btn glass block" type="button">Send summary to doctor</button>
+        </section>
+
+        <section id="tab-inbox" class="tab" hidden aria-labelledby="nav-inbox">
+          <div class="row between"><h3>Doctor inbox</h3><button id="refresh" class="btn link" type="button">Refresh</button></div>
+          <form id="passcode-form" class="chat-form" hidden>
+            <input id="passcode" type="password" autocomplete="current-password" placeholder="Doctor passcode" aria-label="Doctor passcode">
+            <button class="btn primary" type="submit">Open inbox</button>
+          </form>
+          <ul id="cases" class="cases"></ul>
+          <div id="case-detail"></div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <section id="results" class="section">
+    <div class="wrap">
+      <p class="kicker" data-reveal>Results</p>
+      <h2 data-reveal>Honest numbers, held out by patient.</h2>
+      <div class="stat-grid">
+        <div class="stat heart"><b data-count="0.882" data-dec="3">0.882</b><span>Heart normal / abnormal</span><small>MAcc · CinC 2016 adults · top published ~0.86</small></div>
+        <div class="stat heart"><b data-count="0.724" data-dec="3">0.724</b><span>Heart murmur</span><small>MAcc · CirCor children</small></div>
+        <div class="stat lung"><b data-count="0.508" data-dec="3">0.508</b><span>Lung sounds, 4 classes</span><small>ICBHI score · state of the art ~0.60 to 0.65</small></div>
+        <div class="stat lung"><b data-count="0.433" data-dec="3">0.433</b><span>Lung diagnosis, 6 groups</span><small>Macro-F1 · ICBHI + KAUH</small></div>
+      </div>
+      <p class="muted fine" data-reveal>Published figures use other test sets, so they are context, not a contest. The lung sound model is the weak spot; an ImageNet CNN and an ensemble did not beat it. <a href="https://github.com/adityavdn/auscultation-ai/blob/main/reports/results.md" rel="noopener">Full results</a></p>
+    </div>
+  </section>
+
+  <section id="roadmap" class="section">
+    <div class="wrap">
+      <p class="kicker" data-reveal>Roadmap</p>
+      <h2 data-reveal>Where it goes next.</h2>
+      <ol class="timeline">
+        <li class="stage done"><span>Now</span><h3>Prototype</h3><p>Five models, a phone web app, scripted intake and a doctor inbox.</p></li>
+        <li class="stage"><span>Next</span><h3>Better models</h3><p>Audio-pretrained networks for lung sounds, and a detector that rejects noise.</p></li>
+        <li class="stage"><span>Then</span><h3>IoT stethoscope</h3><p>A device posts to the same API, and paired heart and lung data allow a joint model.</p></li>
+        <li class="stage"><span>Pilot</span><h3>NHS pilot</h3><p>HRA ethics approval, local validation and real clinician accounts.</p></li>
+        <li class="stage"><span>Later</span><h3>Regulated product</h3><p>DTAC, DCB0129 and DCB0160, then MHRA software as a medical device.</p></li>
+      </ol>
+    </div>
   </section>
 </main>
 
-<nav class="bottom" role="tablist">
-  <button id="nav-analyse" role="tab" aria-selected="true" data-tab="analyse">Analyse</button>
-  <button id="nav-chat" role="tab" aria-selected="false" data-tab="chat">Chat</button>
-  <button id="nav-inbox" role="tab" aria-selected="false" data-tab="inbox">Inbox</button>
-</nav>
-<script src="app.js"></script>
+<footer class="foot">
+  <p>Built by Aditya Vardhan · University of Roehampton</p>
+  <p class="muted">Research prototype. Decision support only. Not a medical device. Data: PhysioNet/CinC 2016, CirCor, Yaseen 2018, ICBHI 2017, KAUH 2021.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+<script src="https://unpkg.com/lenis@1.3.27/dist/lenis.min.js" defer></script>
+<script src="bg.js" defer></script>
+<script src="motion.js" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>

@@ -1,3 +1,3 @@
 {"name": "Auscultation AI (research prototype)", "short_name": "Auscultation", "start_url": "/", "display": "standalone",
- "background_color": "#f4f6f6", "theme_color": "#0f5f5c",
+ "background_color": "#070b12", "theme_color": "#070b12",
  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]}

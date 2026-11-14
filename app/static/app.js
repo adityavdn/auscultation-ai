@@ -49,8 +49,8 @@ async function api(path, opts = {}) {
 }
 
 // ---------- tabs ----------
-document.querySelectorAll("nav.bottom button").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll("nav.bottom button").forEach((x) => x.setAttribute("aria-selected", x === b));
+document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-selected", x === b));
   document.querySelectorAll(".tab").forEach((t) => { t.hidden = t.id !== `tab-${b.dataset.tab}`; });
   if (b.dataset.tab === "inbox") loadCases();
 }));
@@ -163,7 +163,7 @@ function renderResult(res) {
     res.lung ? renderHeads("lung", res.lung) : null,
     el("button", { class: "btn ghost block", type: "button", text: "Discuss in chat", onclick: () => $("#nav-chat").click() }),
     el("button", { class: "btn primary block", type: "button", text: "Send to doctor", onclick: sendAnalysisCase }));
-  out.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (window.__lenis) window.__lenis.scrollTo(out, { offset: -80 }); else out.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function sendAnalysisCase(e) {
@@ -239,7 +239,7 @@ function showCase(c) {
     c.analysis?.fusion ? el("p", {}, el("span", { class: `pill ${c.analysis.fusion.status}`, text: c.analysis.fusion.status })) : null,
     c.transcript.length ? el("details", {}, el("summary", { text: "Transcript" }),
       c.transcript.map((m) => el("p", { class: "muted", text: `${m.role}: ${m.content}` }))) : null));
-  $("#case-detail").scrollIntoView({ behavior: "smooth" });
+  if (window.__lenis) window.__lenis.scrollTo("#case-detail", { offset: -80 }); else $("#case-detail").scrollIntoView({ behavior: "smooth" });
 }
 $("#refresh").addEventListener("click", loadCases);
 $("#passcode-form").addEventListener("submit", (e) => {
