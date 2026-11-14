@@ -70,7 +70,9 @@ Adult model (CinC 2016) tested on children (CirCor): MAcc 0.491. A drop here is 
 - Datasets differ in stethoscope, population and labelling; results won't transfer unchanged to new devices.
 - Heart and lung models are trained separately (no public paired data). The combined report uses transparent rules, not a joint model.
 
-## Live check (14 Nov 2026, https://auscultation-ai.vercel.app)
+## Live check (14 Nov 2026, https://auscultation-ai.vercel.app, after final review fixes)
 
-All 35 test-split samples served by the live app were run through the public API: **33/35 agree with the dataset label**
-(heart_abnormal 4/4, heart_murmur 3/4, heart_valve 8/8, lung_diagnosis 18/19). Median response 1.3 s, first request after idle up to ~15 s.
+All 34 held-out samples served by the live app were sent through the public API: **32/34 agree with the dataset label**
+(heart_abnormal 4/4, heart_murmur 3/4, heart_valve 7/7, lung_diagnosis 18/19). Median response 1.6 s.
+Non-stethoscope audio (pure tones, speech-like tones) is rejected with a clear message. Known gap: band-limited
+white noise is not reliably rejected.
