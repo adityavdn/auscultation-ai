@@ -64,6 +64,18 @@ Sensitivity 0.285, specificity 0.730.
 
 Adult model (CinC 2016) tested on children (CirCor): MAcc 0.491. A drop here is expected; it shows why local validation is needed before clinical use.
 
+## Tried and not shipped: pretrained CNN for lung sounds (14 Nov 2026)
+
+EfficientNet-B0 (ImageNet weights) fine-tuned on 128-band log-mel spectrograms of each breath cycle, 12 epochs on CPU, epoch picked on 15% of training patients. Scored on the same official test split (2,732 cycles, 49 patients; one clipped recording is now rejected, so 24 fewer cycles than the table above).
+
+| Model | ICBHI score | Sensitivity | Specificity | Macro-F1 |
+|---|---|---|---|---|
+| LightGBM baseline (live) | 0.508 | 0.288 | 0.729 | 0.372 |
+| EfficientNet-B0 CNN | 0.510 | 0.418 | 0.601 | 0.383 |
+| 50/50 average of both (weight fixed before scoring) | 0.511 | 0.321 | 0.702 | 0.369 |
+
+None of these is a meaningful gain, so the live app keeps the LightGBM model, which is smaller and faster. The CNN finds more abnormal cycles but raises more false alarms. Closing the gap to published results (~0.60-0.65) probably needs an audio-pretrained network (e.g. AudioSet) and a GPU.
+
 ## Caveats
 
 - CinC 2016 and Yaseen publish no patient IDs, so each recording is treated as its own patient.
