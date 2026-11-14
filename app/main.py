@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -57,6 +57,14 @@ def create_app(models_dir, samples_dir, db_path):
     manifest_file = samples_dir / "manifest.json"
     samples = {s["id"]: s for s in json.loads(manifest_file.read_text())} if manifest_file.exists() else {}
     app.state.analyzer, app.state.cases = analyzer, cases
+
+    @app.middleware("http")
+    async def vercel_oidc(request: Request, call_next):
+        # On Vercel the AI Gateway credential arrives per request; it is project-scoped, so caching it is safe.
+        token = request.headers.get("x-vercel-oidc-token")
+        if token:
+            os.environ["VERCEL_OIDC_TOKEN"] = token
+        return await call_next(request)
 
     def run(data, kind):
         try:

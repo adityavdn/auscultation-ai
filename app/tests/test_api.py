@@ -104,3 +104,10 @@ def test_case_from_chat_lands_in_inbox(client, monkeypatch):
         {"role": "user", "content": "coughing up blood"}], "analysis": {"summary": "lung sound: crackle"}})
     assert r.status_code == 200 and r.json()["urgency"] == "urgent"
     assert client.get("/api/cases").json()[0]["id"] == r.json()["id"]
+
+
+def test_vercel_oidc_header_enables_gateway(client, monkeypatch):
+    import os
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+    client.get("/api/health", headers={"x-vercel-oidc-token": "tok"})
+    assert os.environ.get("VERCEL_OIDC_TOKEN") == "tok"
