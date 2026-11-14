@@ -4,8 +4,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Trained models + test samples: public release asset, pinned by SHA-256 (joblib files are pickles).
-ARG ASSETS_URL=https://api.github.com/repos/adityavdn/auscultation-models/releases/assets/747575997
-ARG ASSETS_SHA256=392ac8e7b6c900cdc3c2e0d92fbb02823b0eaebe07b7a642694195d91457f3ec
+ARG ASSETS_URL=https://api.github.com/repos/adityavdn/auscultation-models/releases/assets/747593849
+ARG ASSETS_SHA256=02632e39edf7fee7bfc8da8e71e7ced85a9a49cca993a0a21d48e8b1314e19bf
 RUN curl -fsSL -H "Accept: application/octet-stream" -o /tmp/assets.tgz "$ASSETS_URL" \
  && echo "$ASSETS_SHA256  /tmp/assets.tgz" | sha256sum -c - \
  && tar xzf /tmp/assets.tgz -C /app && rm /tmp/assets.tgz
