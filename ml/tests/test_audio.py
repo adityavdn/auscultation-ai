@@ -49,3 +49,38 @@ def test_logmel_shape():
 def test_short_recording_still_gives_one_window():
     w = windows(np.ones(int(2.1 * SR), dtype=np.float32), "heart")
     assert len(w) == 1 and len(w[0]) == 5 * SR
+
+
+def test_m4a_with_moov_at_end_decodes(tmp_path):
+    import subprocess
+    src = tmp_path / "in.wav"
+    src.write_bytes(_wav_bytes((0.5 * np.sin(2 * np.pi * 100 * np.arange(90 * 44100) / 44100)).astype(np.float32), 44100))
+    out = tmp_path / "out.m4a"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-c:a", "aac", str(out)], check=True)
+    assert len(load_audio(out.read_bytes(), "heart")) >= 80 * SR
+
+
+def test_undecodable_says_could_not_decode():
+    with pytest.raises(AudioError, match="decode"):
+        load_audio(b"\x00" * 5000, "heart")
+
+
+def test_nan_audio_rejected():
+    x = (0.3 * np.sin(np.arange(4000 * 4) / 3)).astype(np.float32)
+    x[100] = np.nan
+    buf = io.BytesIO()
+    sf.write(buf, x, 4000, format="WAV", subtype="FLOAT")
+    with pytest.raises(AudioError):
+        load_audio(buf.getvalue(), "heart")
+
+
+def test_clipped_audio_rejected():
+    x = np.clip(3 * np.sin(2 * np.pi * 100 * np.arange(4000 * 4) / 4000), -1, 1).astype(np.float32)
+    with pytest.raises(AudioError, match="clipped|loud"):
+        load_audio(_wav_bytes(x, 4000), "heart")
+
+
+def test_long_audio_truncated_to_cap():
+    from ml.audio import MAX_SECONDS
+    x = (0.3 * np.random.default_rng(0).standard_normal(4000 * (MAX_SECONDS + 30))).astype(np.float32)
+    assert len(load_audio(_wav_bytes(x, 4000), "lung")) == MAX_SECONDS * SR

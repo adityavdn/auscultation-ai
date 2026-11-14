@@ -19,7 +19,7 @@ HEADS = {
 
 def tone(freq, seconds=6, sr=4000, seed=0):
     t = np.arange(int(seconds * sr)) / sr
-    return (np.sin(2 * np.pi * freq * t) + 0.05 * np.random.default_rng(seed).standard_normal(len(t))).astype(np.float32)
+    return (0.5 * np.sin(2 * np.pi * freq * t) + 0.05 * np.random.default_rng(seed).standard_normal(len(t))).astype(np.float32)
 
 
 def wav_bytes(x, sr=4000):
