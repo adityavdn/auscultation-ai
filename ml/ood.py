@@ -6,7 +6,7 @@ probability threshold alone can't catch it.
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
-FALSE_REJECT_RATE = 0.01  # threshold sits at the 1st percentile of training-window scores
+FALSE_REJECT_RATE = 0.002  # threshold at the 0.2th percentile of training-window scores (1% rejected short Yaseen clips)
 
 
 def fit_ood(X):

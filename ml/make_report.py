@@ -5,11 +5,11 @@ from pathlib import Path
 
 BENCH = {
     "heart_abnormal": ("PhysioNet/CinC 2016, normal vs abnormal (adult)", "MAcc", "macc",
-                       "Challenge winner ~0.86 MAcc (hidden test set)"),
+                       "Challenge entries ~0.86 MAcc on a hidden test set (different data)"),
     "heart_murmur": ("CirCor DigiScope 2022, murmur present vs absent (children)", "MAcc", "macc",
                      "Challenge murmur task: top weighted accuracy ~0.78 (different metric)"),
     "heart_valve": ("Yaseen 2018, Normal/AS/MS/MR/MVP", "Accuracy", "accuracy",
-                    "Paper reports ~97%; dataset is small and clean, so scores flatter real use"),
+                    "Paper ~97%. Small, clean, split by recording: 1.000 likely reflects near-duplicate clips, not real-world accuracy"),
     "lung_sound": ("ICBHI 2017, per breath cycle: normal/crackle/wheeze/both (official 60/40 split)", "ICBHI score",
                    "icbhi", "Published state of the art ~0.60-0.65 ICBHI score"),
     "lung_diagnosis": ("ICBHI 2017 + KAUH 2021, patient diagnosis per recording", "Macro-F1", "macro_f1",
@@ -25,7 +25,10 @@ def _metric(r, key):
 def render(m):
     out = ["# Results: heart and lung sound models", "",
            "> Research prototype. Decision support only. Not a medical device.", "",
-           "All test sets are held out **by patient**: no patient appears in both training and testing.", "",
+           "Test sets are held out **by patient** where the dataset publishes patient IDs (CirCor, ICBHI, KAUH). "
+           "CinC 2016 and Yaseen publish none, so they are split **by recording**; their scores may be optimistic.", "",
+           "Published references are given for context only: they use other test sets and are **not comparable** "
+           "one-to-one with these numbers.", "",
            "| Task | Data | Headline metric | Score | Macro-F1 | Test recordings (patients) | Published reference |",
            "|---|---|---|---|---|---|---|"]
     for task, (data, name, key, ref) in BENCH.items():

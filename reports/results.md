@@ -2,13 +2,15 @@
 
 > Research prototype. Decision support only. Not a medical device.
 
-All test sets are held out **by patient**: no patient appears in both training and testing.
+Test sets are held out **by patient** where the dataset publishes patient IDs (CirCor, ICBHI, KAUH). CinC 2016 and Yaseen publish none, so they are split **by recording**; their scores may be optimistic.
+
+Published references are given for context only: they use other test sets and are **not comparable** one-to-one with these numbers.
 
 | Task | Data | Headline metric | Score | Macro-F1 | Test recordings (patients) | Published reference |
 |---|---|---|---|---|---|---|
-| heart_abnormal | PhysioNet/CinC 2016, normal vs abnormal (adult) | MAcc | 0.882 | 0.810 | 648 (648) | Challenge winner ~0.86 MAcc (hidden test set) |
+| heart_abnormal | PhysioNet/CinC 2016, normal vs abnormal (adult) | MAcc | 0.882 | 0.810 | 648 (648) | Challenge entries ~0.86 MAcc on a hidden test set (different data) |
 | heart_murmur | CirCor DigiScope 2022, murmur present vs absent (children) | MAcc | 0.724 | 0.689 | 602 (175) | Challenge murmur task: top weighted accuracy ~0.78 (different metric) |
-| heart_valve | Yaseen 2018, Normal/AS/MS/MR/MVP | Accuracy | 1.000 | 1.000 | 200 (200) | Paper reports ~97%; dataset is small and clean, so scores flatter real use |
+| heart_valve | Yaseen 2018, Normal/AS/MS/MR/MVP | Accuracy | 1.000 | 1.000 | 200 (200) | Paper ~97%. Small, clean, split by recording: 1.000 likely reflects near-duplicate clips, not real-world accuracy |
 | lung_sound | ICBHI 2017, per breath cycle: normal/crackle/wheeze/both (official 60/40 split) | ICBHI score | 0.507 | 0.370 | 2756 (49) | Published state of the art ~0.60-0.65 ICBHI score |
 | lung_diagnosis | ICBHI 2017 + KAUH 2021, patient diagnosis per recording | Macro-F1 | 0.433 | 0.433 | 252 (49) | No single standard benchmark; ICBHI is ~86% COPD, so macro-F1 is the honest number |
 
