@@ -67,3 +67,8 @@ Adult model (CinC 2016) tested on children (CirCor): MAcc 0.491. A drop here is 
 - CinC 2016 and Yaseen publish no patient IDs, so each recording is treated as its own patient.
 - Datasets differ in stethoscope, population and labelling; results won't transfer unchanged to new devices.
 - Heart and lung models are trained separately (no public paired data). The combined report uses transparent rules, not a joint model.
+
+## Live check (14 Nov 2026, https://auscultation-ai.vercel.app)
+
+All 35 test-split samples served by the live app were run through the public API: **33/35 agree with the dataset label**
+(heart_abnormal 4/4, heart_murmur 3/4, heart_valve 8/8, lung_diagnosis 18/19). Median response 1.3 s, first request after idle up to ~15 s.
