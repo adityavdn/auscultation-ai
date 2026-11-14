@@ -18,7 +18,6 @@ RED_FLAGS = re.compile(
     r"passed out|unconscious|cough(ing)? (up )?blood|blood when i cough|collapse", re.I)
 RED_FLAG_REPLY = ("Your symptoms could be serious. Call 999 now, or go to A&E. "
                   "If you're not sure, call NHS 111. Don't wait for an online reply.")
-UNAVAILABLE = "The assistant is unavailable right now. Your results are still shown, and you can send them to the doctor."
 SAFETY = (
     "You are a supportive assistant inside a RESEARCH PROTOTYPE for heart and lung sound analysis. "
     "It is decision support only and not a medical device. Rules: never state a diagnosis as fact; "
@@ -33,6 +32,47 @@ ROLE = {
 }
 SUMMARY_PROMPT = ("Summarise this conversation and the AI findings for a doctor. Reply with JSON only, keys: "
                   "symptoms, duration, history, ai_findings, urgency (one of routine, soon, urgent).")
+
+
+# Scripted intake: used when no LLM is configured or it fails. Fixed questions, predictable output.
+QUESTIONS = [
+    "Thanks. How long have you had this?",
+    "Do you smoke, or have you smoked in the past?",
+    "Have you had any heart or lung problems before, such as asthma, COPD or heart failure?",
+    "What medicines do you take, if any?",
+]
+DONE = ("Thank you, that's everything I need. Tap 'Send summary to doctor' and the doctor will see your answers "
+        "together with the sound analysis.")
+
+
+def _status(analysis):
+    if not isinstance(analysis, dict):
+        return None
+    return (analysis.get("fusion") or {}).get("status") or analysis.get("status")
+
+
+def _findings(analysis):
+    return (analysis or {}).get("summary", "") if isinstance(analysis, dict) else ""
+
+
+def _explain(analysis):
+    f = _findings(analysis)
+    if not f:
+        return ""
+    return (f" The sound analysis suggests: {f}. This is not a diagnosis; the doctor will review it with you.")
+
+
+def _scripted(history, analysis, role):
+    if role == "doctor":
+        f = _findings(analysis)
+        if not f:
+            return "No analysis yet. Run a heart or lung analysis first, then ask again."
+        return (f"Model findings: {f}. Overall status: {_status(analysis) or 'unknown'}. Each head was trained on a "
+                "public dataset (shown under each result); treat these as decision support and confirm clinically.")
+    answered = sum(1 for m in history if m.get("role") == "user")
+    if answered <= len(QUESTIONS):
+        return QUESTIONS[answered - 1] if answered else "What's been bothering you?"
+    return DONE + _explain(analysis)
 
 
 class LLMError(RuntimeError):
@@ -78,20 +118,21 @@ def chat(history, analysis, role):
     if role == "patient" and RED_FLAGS.search(last):
         return {"reply": RED_FLAG_REPLY, "red_flag": True}
     if _provider() is None:
-        return {"reply": UNAVAILABLE, "red_flag": False}
+        return {"reply": _scripted(history, analysis, role), "red_flag": False}
     system = f"{SAFETY}\n{ROLE[role]}\nLatest AI analysis (may be empty): {json.dumps(analysis)[:3000]}"
     try:
         return {"reply": _llm([{"role": "system", "content": system}] + _clean(history)), "red_flag": False}
     except LLMError as e:
         log.warning("llm error: %s", e)
-        return {"reply": UNAVAILABLE, "red_flag": False}
+        return {"reply": _scripted(history, analysis, role), "red_flag": False}
 
 
 def summarize_case(history, analysis):
     red = bool(RED_FLAGS.search(_user_text(history)))
-    base = {"symptoms": _user_text(history)[:500], "duration": "", "history": "",
-            "ai_findings": (analysis or {}).get("summary", "") if isinstance(analysis, dict) else "",
-            "urgency": "urgent" if red else "routine"}
+    answers = [str(m.get("content", ""))[:500] for m in history if m.get("role") == "user"]
+    base = {"symptoms": answers[0] if answers else "", "duration": answers[1] if len(answers) > 1 else "",
+            "history": "; ".join(answers[2:5]), "ai_findings": _findings(analysis),
+            "urgency": "urgent" if red else ("soon" if _status(analysis) == "abnormal" else "routine")}
     if _provider() is not None:
         try:
             got = json.loads(_llm([{"role": "system", "content": f"{SAFETY}\n{SUMMARY_PROMPT}"},
