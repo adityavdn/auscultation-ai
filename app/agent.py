@@ -1,4 +1,5 @@
 """Patient/doctor assistant on a free LLM (Vercel AI Gateway or Groq). Red flags are caught before any LLM call."""
+import contextvars
 import json
 import logging
 import os
@@ -12,6 +13,8 @@ GATEWAY_MODEL = os.environ.get("GATEWAY_MODEL", "meta/llama-3.3-70b")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_TURNS = 30
+# Per-request Vercel OIDC token (set by middleware on Vercel only); never written to os.environ.
+REQUEST_OIDC = contextvars.ContextVar("request_oidc", default=None)
 RED_FLAGS = re.compile(
     r"chest pain|crushing|tight(ness)? (in|across) (my )?chest|can'?t breathe|cannot breathe|"
     r"struggling to breathe|severe(ly)? breathless|blue lips|lips (are|turning) blue|faint(ed|ing)?|"
@@ -81,7 +84,7 @@ class LLMError(RuntimeError):
 
 def _provider():
     """Vercel AI Gateway (keyless on Vercel via OIDC) first, Groq second, else None."""
-    gw = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_OIDC_TOKEN")
+    gw = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_OIDC_TOKEN") or REQUEST_OIDC.get()
     if gw:
         return GATEWAY_URL, gw, GATEWAY_MODEL
     if os.environ.get("GROQ_API_KEY"):

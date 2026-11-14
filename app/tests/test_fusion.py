@@ -39,3 +39,8 @@ def test_low_conf_flag():
 
 def test_heart_only_ok():
     assert fuse(HEART_OK, None)["status"] == "normal"
+
+
+def test_missing_head_does_not_crash():
+    r = fuse({"heart_abnormal": head("normal", 0.9)}, {"lung_diagnosis": head("healthy", 0.9)})
+    assert r["status"] == "normal"

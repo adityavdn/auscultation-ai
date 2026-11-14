@@ -106,8 +106,49 @@ def test_case_from_chat_lands_in_inbox(client, monkeypatch):
     assert client.get("/api/cases").json()[0]["id"] == r.json()["id"]
 
 
-def test_vercel_oidc_header_enables_gateway(client, monkeypatch):
+def test_oidc_header_ignored_off_vercel(client, monkeypatch):
     import os
+    monkeypatch.delenv("VERCEL", raising=False)
     monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
     client.get("/api/health", headers={"x-vercel-oidc-token": "tok"})
-    assert os.environ.get("VERCEL_OIDC_TOKEN") == "tok"
+    assert os.environ.get("VERCEL_OIDC_TOKEN") is None
+
+
+def test_oidc_header_is_per_request_not_global(client, monkeypatch):
+    import os
+
+    from app import agent
+    seen = []
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+    monkeypatch.delenv("AI_GATEWAY_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setattr(agent, "_llm", lambda m, json_mode=False: seen.append(agent._provider()) or "hi")
+    client.post("/api/chat", json={"role": "doctor", "history": [{"role": "user", "content": "x"}]},
+                headers={"x-vercel-oidc-token": "tok"})
+    assert seen and seen[0][1] == "tok"
+    assert os.environ.get("VERCEL_OIDC_TOKEN") is None and agent._provider() is None
+
+
+def test_analysis_endpoints_are_sync(client):
+    import inspect
+    eps = {r.path: r.endpoint for r in client.app.routes if hasattr(r, "endpoint")}
+    for path in ("/api/analyze/{kind}", "/api/analyze/combined"):
+        assert not inspect.iscoroutinefunction(eps[path]), path
+
+
+def test_inbox_requires_passcode_when_set(models_dir, tmp_path, monkeypatch):
+    monkeypatch.setenv("DOCTOR_PASSCODE", "letmein")
+    c = TestClient(create_app(models_dir, tmp_path, tmp_path / "db.sqlite"))
+    assert c.post("/api/cases", json={"summary": {}}).status_code == 200
+    assert c.get("/api/cases").status_code == 401
+    assert c.get("/api/cases/1").status_code == 401
+    assert c.get("/api/cases", headers={"x-doctor-passcode": "letmein"}).status_code == 200
+
+
+def test_case_creation_rate_limited(models_dir, tmp_path, monkeypatch):
+    from app import main
+    monkeypatch.setattr(main, "CASES_PER_HOUR", 3)
+    c = TestClient(create_app(models_dir, tmp_path, tmp_path / "db.sqlite"))
+    codes = [c.post("/api/cases", json={"summary": {}}).status_code for _ in range(4)]
+    assert codes == [200, 200, 200, 429]

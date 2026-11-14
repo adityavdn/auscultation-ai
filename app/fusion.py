@@ -10,10 +10,11 @@ def _heads(*groups):
 def fuse(heart, lung):
     heads = _heads(heart, lung)
     flags = []
-    heart_abn = bool(heart) and (heart["heart_murmur"]["label"] == "present"
-                                 or heart["heart_abnormal"]["label"] == "abnormal")
+    label = lambda group, name: (group or {}).get(name, {}).get("label")  # noqa: E731  heads may be missing
+    heart_abn = bool(heart) and (label(heart, "heart_murmur") == "present"
+                                 or label(heart, "heart_abnormal") == "abnormal")
     heart_norm = bool(heart) and not heart_abn
-    lung_sound = lung["lung_sound"]["label"] if lung else None
+    lung_sound = label(lung, "lung_sound")
     if heart_abn and lung_sound in ("crackle", "both"):
         flags.append({"rule": "cardiac_pulmonary", "message": "Murmur/abnormal heart sound with crackles: "
                       "consider heart failure or fluid overload."})

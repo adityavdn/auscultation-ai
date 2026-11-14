@@ -1,11 +1,14 @@
 """FastAPI service: analysis API, sample recordings, doctor inbox, agent chat, and the PWA."""
+import hmac
 import json
 import logging
 import os
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -20,6 +23,7 @@ log = logging.getLogger("app")
 DISCLAIMER = "Research prototype. Decision support only. Not a medical device."
 MAX_BYTES = 20 * 1024 * 1024
 ROOT = Path(__file__).resolve().parent.parent
+CASES_PER_HOUR = 30  # per client IP; stops one client flooding the demo inbox
 
 
 class CaseIn(BaseModel):
@@ -42,8 +46,8 @@ class FromChatIn(BaseModel):
     analysis: Optional[dict] = None
 
 
-async def _read(upload: UploadFile) -> bytes:
-    data = await upload.read(MAX_BYTES + 1)
+def _read(upload: UploadFile) -> bytes:
+    data = upload.file.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         raise HTTPException(413, "File too large (max 20 MB).")
     return data
@@ -58,13 +62,31 @@ def create_app(models_dir, samples_dir, db_path):
     samples = {s["id"]: s for s in json.loads(manifest_file.read_text())} if manifest_file.exists() else {}
     app.state.analyzer, app.state.cases = analyzer, cases
 
+    created = defaultdict(deque)
+
     @app.middleware("http")
     async def vercel_oidc(request: Request, call_next):
-        # On Vercel the AI Gateway credential arrives per request; it is project-scoped, so caching it is safe.
-        token = request.headers.get("x-vercel-oidc-token")
-        if token:
-            os.environ["VERCEL_OIDC_TOKEN"] = token
-        return await call_next(request)
+        # On Vercel the AI Gateway credential arrives per request. Honour it only there, and only for this request.
+        token = request.headers.get("x-vercel-oidc-token") if os.environ.get("VERCEL") else None
+        reset = agent.REQUEST_OIDC.set(token)
+        try:
+            return await call_next(request)
+        finally:
+            agent.REQUEST_OIDC.reset(reset)
+
+    def doctor_only(request: Request):
+        code = os.environ.get("DOCTOR_PASSCODE")
+        if code and not hmac.compare_digest(request.headers.get("x-doctor-passcode", ""), code):
+            raise HTTPException(401, "Doctor passcode required.")
+
+    def rate_limited(request: Request):
+        ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0]
+        now, q = time.time(), created[ip.strip()]
+        while q and now - q[0] > 3600:
+            q.popleft()
+        if len(q) >= CASES_PER_HOUR:
+            raise HTTPException(429, "Too many cases from this device; try again later.")
+        q.append(now)
 
     def run(data, kind):
         try:
@@ -73,19 +95,19 @@ def create_app(models_dir, samples_dir, db_path):
             raise HTTPException(422, str(e))
 
     @app.post("/api/analyze/combined")
-    async def analyze_combined(heart: Optional[UploadFile] = File(None), lung: Optional[UploadFile] = File(None)):
+    def analyze_combined(heart: Optional[UploadFile] = File(None), lung: Optional[UploadFile] = File(None)):
         if heart is None and lung is None:
             raise HTTPException(422, "Upload a heart recording, a lung recording, or both.")
-        h = run(await _read(heart), "heart") if heart else None
-        lu = run(await _read(lung), "lung") if lung else None
+        h = run(_read(heart), "heart") if heart else None
+        lu = run(_read(lung), "lung") if lung else None
         return {"heart": h, "lung": lu, "fusion": fuse(h and h["heads"], lu and lu["heads"]),
                 "disclaimer": DISCLAIMER}
 
     @app.post("/api/analyze/{kind}")
-    async def analyze(kind: str, file: UploadFile = File(...)):
+    def analyze(kind: str, file: UploadFile = File(...)):
         if kind not in ("heart", "lung"):
             raise HTTPException(404, "Unknown kind; use heart or lung.")
-        r = run(await _read(file), kind)
+        r = run(_read(file), kind)
         heads = r["heads"]
         return r | {"fusion": fuse(heads if kind == "heart" else None, heads if kind == "lung" else None),
                     "disclaimer": DISCLAIMER}
@@ -100,15 +122,15 @@ def create_app(models_dir, samples_dir, db_path):
             raise HTTPException(404, "No such sample.")
         return FileResponse(samples_dir / samples[sample_id]["file"], media_type="audio/wav")
 
-    @app.post("/api/cases")
+    @app.post("/api/cases", dependencies=[Depends(rate_limited)])
     def add_case(case: CaseIn):
         return cases.add(case.patient_name, case.urgency, case.summary, case.analysis, case.transcript)
 
-    @app.get("/api/cases")
+    @app.get("/api/cases", dependencies=[Depends(doctor_only)])
     def list_cases():
         return cases.list()
 
-    @app.get("/api/cases/{case_id}")
+    @app.get("/api/cases/{case_id}", dependencies=[Depends(doctor_only)])
     def get_case(case_id: int):
         c = cases.get(case_id)
         if not c:
@@ -119,7 +141,7 @@ def create_app(models_dir, samples_dir, db_path):
     def chat(body: ChatIn):
         return agent.chat(body.history, body.analysis, body.role)
 
-    @app.post("/api/cases/from-chat")
+    @app.post("/api/cases/from-chat", dependencies=[Depends(rate_limited)])
     def case_from_chat(body: FromChatIn):
         s = agent.summarize_case(body.history, body.analysis)
         return cases.add(body.patient_name, s["urgency"], s, body.analysis, body.history)
