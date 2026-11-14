@@ -11,7 +11,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from ml.audio import SR, WIN, load_audio, windows  # noqa: E402
+from ml.audio import AudioError  # noqa: E402
 from ml.features import logmel, stat_features  # noqa: E402
+from ml.ood import is_ood  # noqa: E402
 
 LOW_CONF = 0.6
 CYCLE_WIN = (3.0, 1.5)  # lung_sound was trained on single breath cycles, so score short windows
@@ -38,8 +40,9 @@ def _spectrogram_png(x):
 
 class Analyzer:
     def __init__(self, models_dir):
-        self.heads = {p.stem: joblib.load(p) for p in sorted(Path(models_dir).glob("*.joblib"))
-                      if not p.name.startswith(".")}
+        files = [p for p in sorted(Path(models_dir).glob("*.joblib")) if not p.name.startswith(".")]
+        self.ood = {p.stem.removeprefix("ood_"): joblib.load(p) for p in files if p.stem.startswith("ood_")}
+        self.heads = {p.stem: joblib.load(p) for p in files if not p.stem.startswith("ood_")}
 
     def _head(self, b, X):
         probs = b["model"].predict_proba(X)
@@ -59,6 +62,9 @@ class Analyzer:
         x = load_audio(audio, kind)
         segs = {"default": windows(x, kind), "cycle": _cycle_windows(x)}
         feats = {k: np.array([stat_features(w, kind) for w in v]) for k, v in segs.items() if v}
+        if kind in self.ood and is_ood(self.ood[kind], feats["default"]):
+            raise AudioError(f"This doesn't sound like a {kind} recording from a stethoscope. "
+                             "Place the stethoscope on the chest and record again.")
         heads, per_window = {}, {}
         for name, b in self.heads.items():
             if b["kind"] != kind:
