@@ -124,3 +124,13 @@ def test_scripted_summary_maps_answers(no_llm):
 
 def test_scripted_summary_routine_when_normal(no_llm):
     assert agent.summarize_case(_hist(2), {"fusion": {"status": "normal"}, "summary": ""})["urgency"] == "routine"
+
+
+@pytest.mark.parametrize("text", ["I'm short of breath", "pain in my chest", "my chest hurts",
+                                  "my heart is racing", "I can't catch my breath", "lips have gone blue"])
+def test_more_red_flag_phrases(text):
+    assert agent.chat([{"role": "user", "content": text}], None, "patient")["red_flag"]
+
+
+def test_ordinary_symptoms_not_red_flag(no_llm):
+    assert not agent.chat([{"role": "user", "content": "mild cough for a week"}], None, "patient")["red_flag"]

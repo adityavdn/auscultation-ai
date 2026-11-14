@@ -16,9 +16,11 @@ MAX_TURNS = 30
 # Per-request Vercel OIDC token (set by middleware on Vercel only); never written to os.environ.
 REQUEST_OIDC = contextvars.ContextVar("request_oidc", default=None)
 RED_FLAGS = re.compile(
-    r"chest pain|crushing|tight(ness)? (in|across) (my )?chest|can'?t breathe|cannot breathe|"
-    r"struggling to breathe|severe(ly)? breathless|blue lips|lips (are|turning) blue|faint(ed|ing)?|"
-    r"passed out|unconscious|cough(ing)? (up )?blood|blood when i cough|collapse", re.I)
+    r"chest (pain|hurts|is hurting)|pain (in|across) (my )?chest|crushing|tight(ness)? (in|across) (my )?chest|"
+    r"can'?t (breathe|catch my breath)|cannot breathe|struggling to breathe|short(ness)? of breath|"
+    r"severe(ly)? breathless|blue lips|lips (are|have|turning|gone|going) ?(gone |turned )?blue|"
+    r"heart (is )?racing|faint(ed|ing)?|passed out|unconscious|cough(ing)? (up )?blood|blood when i cough|collapse",
+    re.I)
 RED_FLAG_REPLY = ("Your symptoms could be serious. Call 999 now, or go to A&E. "
                   "If you're not sure, call NHS 111. Don't wait for an online reply.")
 SAFETY = (
