@@ -45,3 +45,33 @@ def test_ood_gate_rejects_unlike_audio(models_dir, tmp_path):
     noise = np.random.default_rng(1).standard_normal(4000 * 12).astype("float32")
     with pytest.raises(AudioError, match="stethoscope"):
         a.analyze(wav_bytes(noise), "heart")
+
+
+def _tiny_onnx(path, n_classes=4):
+    """Torch-free stand-in for the exported CNN: mean over time, linear layer, softmax."""
+    import numpy as np
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+    w = numpy_helper.from_array(np.random.default_rng(0).normal(0, 0.1, (128, n_classes)).astype("float32"), "w")
+    g = helper.make_graph(
+        [helper.make_node("ReduceMean", ["mel", "axes"], ["pooled"], keepdims=0),
+         helper.make_node("MatMul", ["pooled", "w"], ["logits"]),
+         helper.make_node("Softmax", ["logits"], ["probs"], axis=1)],
+        "tiny", [helper.make_tensor_value_info("mel", TensorProto.FLOAT, ["batch", 128, "t"])],
+        [helper.make_tensor_value_info("probs", TensorProto.FLOAT, ["batch", n_classes])],
+        [w, numpy_helper.from_array(np.array([2], dtype="int64"), "axes")])
+    onnx.save(helper.make_model(g, opset_imports=[helper.make_opsetid("", 18)]), str(path))
+
+
+def test_onnx_lung_sound_head_replaces_joblib(models_dir, tmp_path):
+    import json
+    import shutil
+    d = tmp_path / "m"
+    shutil.copytree(models_dir, d)
+    labels = ["both", "crackle", "normal", "wheeze"]
+    _tiny_onnx(d / "lung_sound.onnx")
+    (d / "lung_sound.onnx.json").write_text(json.dumps({"labels": labels, "kind": "lung", "trained_on": "icbhi"}))
+    r = Analyzer(d).analyze(wav_bytes(tone(600, 10)), "lung")
+    h = r["heads"]["lung_sound"]
+    assert set(h["probs"]) == set(labels) and h["trained_on"] == "icbhi"
+    assert abs(sum(h["probs"].values()) - 1) < 1e-4 and r["window_scores"]

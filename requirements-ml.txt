@@ -8,3 +8,6 @@ joblib
 pandas
 matplotlib
 pytest
+torch
+torchvision
+onnx

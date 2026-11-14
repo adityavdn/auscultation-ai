@@ -5,6 +5,7 @@ librosa==1.0.1
 lightgbm==4.7.0
 matplotlib==3.11.2
 numpy==2.5.4
+onnxruntime==1.32.0
 pandas==3.1.1
 python-multipart==0.0.33
 scikit-learn==1.9.1

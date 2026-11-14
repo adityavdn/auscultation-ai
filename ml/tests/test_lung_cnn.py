@@ -1,6 +1,11 @@
+import os
+
 import numpy as np
 import pytest
 
+# torch in the same process as the joblib/LightGBM tests hangs on macOS; run these on their own:
+#   RUN_TORCH_TESTS=1 pytest ml/tests/test_lung_cnn.py
+pytestmark = pytest.mark.skipif(not os.environ.get("RUN_TORCH_TESTS"), reason="set RUN_TORCH_TESTS=1")
 torch = pytest.importorskip("torch")
 
 from ml.lung_cnn import build_model, export_onnx, fit  # noqa: E402

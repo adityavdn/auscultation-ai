@@ -3,6 +3,8 @@ import base64
 import io
 from pathlib import Path
 
+import json
+
 import joblib
 import matplotlib
 
@@ -12,6 +14,7 @@ import numpy as np  # noqa: E402
 
 from ml.audio import SR, WIN, load_audio, windows  # noqa: E402
 from ml.audio import AudioError  # noqa: E402
+from ml.cnn_frontend import mel32k  # noqa: E402
 from ml.features import logmel, stat_features  # noqa: E402
 from ml.ood import is_ood  # noqa: E402
 
@@ -43,9 +46,28 @@ class Analyzer:
         files = [p for p in sorted(Path(models_dir).glob("*.joblib")) if not p.name.startswith(".")]
         self.ood = {p.stem.removeprefix("ood_"): joblib.load(p) for p in files if p.stem.startswith("ood_")}
         self.heads = {p.stem: joblib.load(p) for p in files if not p.stem.startswith("ood_")}
+        # ONNX heads (pretrained CNNs) replace the LightGBM head of the same name.
+        self.onnx = {}
+        for p in sorted(Path(models_dir).glob("*.onnx")):
+            if p.name.startswith("."):
+                continue
+            import onnxruntime as ort
+            meta = json.loads(p.with_suffix(".onnx.json").read_text())
+            self.onnx[p.stem] = (ort.InferenceSession(str(p), providers=["CPUExecutionProvider"]), meta)
+            self.heads[p.stem] = {"kind": meta["kind"], "labels": meta["labels"], "trained_on": meta.get("trained_on", ""),
+                                  "onnx": True}
 
     def _head(self, b, X):
         probs = b["model"].predict_proba(X)
+        return self._summarize(b, probs), probs
+
+    def _onnx_head(self, name, windows_):
+        sess, meta = self.onnx[name]
+        probs = sess.run(None, {"mel": np.stack([mel32k(w) for w in windows_])})[0]
+        return self._summarize(self.heads[name], probs), probs
+
+    @staticmethod
+    def _summarize(b, probs):
         mean = probs.mean(0)
         labels = list(b["labels"])
         if b.get("positive"):
@@ -56,7 +78,7 @@ class Analyzer:
         else:
             label, conf = labels[int(mean.argmax())], mean.max()
         return {"label": label, "confidence": float(conf), "probs": dict(zip(labels, map(float, mean))),
-                "trained_on": b.get("trained_on", ""), "low_confidence": bool(conf < LOW_CONF)}, probs
+                "trained_on": b.get("trained_on", ""), "low_confidence": bool(conf < LOW_CONF)}
 
     def analyze(self, audio, kind):
         x = load_audio(audio, kind)
@@ -70,7 +92,10 @@ class Analyzer:
             if b["kind"] != kind:
                 continue
             key = "cycle" if name == "lung_sound" and "cycle" in feats else "default"
-            heads[name], per_window[name] = self._head(b, feats[key])
+            if b.get("onnx"):
+                heads[name], per_window[name] = self._onnx_head(name, segs[key])
+            else:
+                heads[name], per_window[name] = self._head(b, feats[key])
             per_window[name] = (key, per_window[name])
         primary, ref = PRIMARY[kind]
         scores = []

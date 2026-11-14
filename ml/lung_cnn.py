@@ -60,7 +60,8 @@ def _predict(model, X, device, batch=64):
     out = []
     with torch.no_grad():
         for i in range(0, len(X), batch):
-            out.append(torch.softmax(model(torch.from_numpy(X[i:i + batch]).to(device)), 1).cpu().numpy())
+            xb = torch.from_numpy(X[i:i + batch].astype(np.float32)).to(device)
+            out.append(torch.softmax(model(xb), 1).cpu().numpy())
     return np.concatenate(out)
 
 
@@ -85,7 +86,7 @@ def fit(X, y, Xv, yv, labels, normal_label="normal", epochs=30, batch=32, lr=3e-
         order = rng.permutation(len(X))
         for i in range(0, len(X), batch):
             b = order[i:i + batch]
-            xb = _augment(torch.from_numpy(X[b]), rng).to(device)
+            xb = _augment(torch.from_numpy(X[b].astype(np.float32)), rng).to(device)
             loss = loss_fn(model(xb), torch.from_numpy(yi[b]).to(device))
             opt.zero_grad()
             loss.backward()
@@ -94,7 +95,7 @@ def fit(X, y, Xv, yv, labels, normal_label="normal", epochs=30, batch=32, lr=3e-
         pv = _predict(model, Xv, device)
         score = icbhi_score(list(yv), [labels[k] for k in pv.argmax(1)], normal_label=normal_label)["score"]
         history.append(round(float(score), 4))
-        log.info("epoch %d val ICBHI %.4f", ep + 1, score)
+        log.info("epoch %d val ICBHI %.4f (%s)", ep + 1, score, device)
         if score > best:
             best, best_state = score, copy.deepcopy(model.state_dict())
     model.load_state_dict(best_state)
