@@ -2,7 +2,7 @@
 FROM python:3.13-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libgomp1 curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-ARG SRC_SHA=2a319af36d7a1d610e2250d726fd3732e74eb324
+ARG SRC_SHA=fdaed7ca58718e029f06b64778f08d0282ff96c4
 RUN curl -fsSL "https://codeload.github.com/adityavdn/auscultation-ai/tar.gz/$SRC_SHA" | tar xz --strip-components=1 -C /app \
  && pip install --no-cache-dir -r requirements.txt
 # Trained models + test samples: release asset of this repo, pinned by SHA-256 (joblib files are pickles).
