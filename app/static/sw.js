@@ -1,5 +1,5 @@
 // App-shell cache only; API calls always go to the network.
-const SHELL = "shell-v2";
+const SHELL = "shell-v3";
 const FILES = ["/", "/index.html", "/styles.css", "/app.js", "/icon.svg", "/manifest.json", "/bg.js", "/motion.js"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES))));
 self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) =>
