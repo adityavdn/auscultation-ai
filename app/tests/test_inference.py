@@ -78,7 +78,7 @@ def test_onnx_lung_sound_head_replaces_joblib(models_dir, tmp_path):
 
 
 def _tiny_embedder(path, dim=8):
-    """Torch-free stand-in for the exported AST embedder: fbank (n, 1024, 128) -> mean over time -> linear."""
+    """Torch-free stand-in for the exported AST embedder: fbank (n, frames, 128) -> mean over time -> linear."""
     import numpy as np
     import onnx
     from onnx import TensorProto, helper, numpy_helper
@@ -86,7 +86,7 @@ def _tiny_embedder(path, dim=8):
     g = helper.make_graph(
         [helper.make_node("ReduceMean", ["fbank", "axes"], ["pooled"], keepdims=0),
          helper.make_node("MatMul", ["pooled", "w"], ["emb"])],
-        "tiny_ast", [helper.make_tensor_value_info("fbank", TensorProto.FLOAT, ["n", 1024, 128])],
+        "tiny_ast", [helper.make_tensor_value_info("fbank", TensorProto.FLOAT, ["n", "t", 128])],
         [helper.make_tensor_value_info("emb", TensorProto.FLOAT, ["n", dim])],
         [w, numpy_helper.from_array(np.array([1], dtype="int64"), "axes")])
     onnx.save(helper.make_model(g, opset_imports=[helper.make_opsetid("", 18)]), str(path))

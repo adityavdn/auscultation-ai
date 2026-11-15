@@ -76,17 +76,20 @@ EfficientNet-B0 (ImageNet weights) fine-tuned on 128-band log-mel spectrograms o
 
 None of these is a meaningful gain, so the live app keeps the LightGBM model, which is smaller and faster. The CNN finds more abnormal cycles but raises more false alarms. Closing the gap to published results (~0.60-0.65) probably needs an audio-pretrained network (e.g. AudioSet) and a GPU.
 
-## Tried and not shipped: AudioSet-pretrained AST embeddings (14 Nov 2026)
+## Tried and not shipped: AudioSet-pretrained AST (14 to 15 Nov 2026)
 
-The Audio Spectrogram Transformer (`MIT/ast-finetuned-audioset-10-10-0.4593`, frozen) turned each breath cycle, repeat-padded to 8 s, into mean-pooled tokens from layers 4, 8 and 12 (2,304 values). A light head was chosen on 20% of training patients (logistic regression 0.594 vs LightGBM 0.585 on validation), refit on all training patients, and scored once on the official test split.
+The Audio Spectrogram Transformer (`MIT/ast-finetuned-audioset-10-10-0.4593`, frozen) turns each breath cycle into mean-pooled tokens from a few layers, and a light head trained on 20% held-out training patients picks the label. Each version was scored once on the official test split.
 
-| Model | ICBHI score | Sensitivity | Specificity |
-|---|---|---|---|
-| LightGBM on hand-made features (live) | 0.508 | 0.288 | 0.729 |
-| AST embeddings + logistic regression, float32 | **0.533** | 0.504 | 0.561 |
-| Same head, AST quantised to int8 (dynamic) | 0.502 | 0.475 | 0.528 |
+| Model | ICBHI score | Sensitivity | Specificity | CPU time per window (Apple M3) |
+|---|---|---|---|---|
+| LightGBM on hand-made features (live) | 0.508 | 0.288 | 0.729 | about 1 ms |
+| Full AST, float32, 8 s input, layers 4/8/12 + logistic regression | 0.533 | 0.504 | 0.561 | 2,300 ms |
+| Same head, AST quantised to int8 | 0.502 | 0.475 | 0.528 | 700 ms |
+| Slim AST: 8 layers, 4 s input, per-channel int8, head trained on int8 embeddings | 0.519 | 0.497 | 0.540 | 70 ms |
 
-Float32 AST is the best lung model so far: it finds far more abnormal cycles at the cost of more false alarms. It is not live because it is slow on a CPU server: about 2.3 s per 3 s window in float32 and 0.7 s in int8 on an Apple M3, so one lung recording would take 8 to 28 s. Dynamic int8 loses the gain; per-channel int8 agrees with float32 on 97.5% of training cycles but is no faster. The code path is in place (`ml/run_lung_ast.py`, `ml/ast_fbank.py`, and the `embedder` role in `app/inference.py`), so it can be switched on when a GPU or a faster CPU is available.
+The slim model is ten times faster than int8 and keeps most of the gain, but the gain is not proven. A paired bootstrap over the 49 test patients puts the slim model's advantage over LightGBM at +0.007, 95% interval -0.046 to +0.055; it wins in 63% of resamples. With this few test patients, ICBHI scores carry roughly ±0.05 of uncertainty, so all of these lung models are statistically level. What changes is the balance: AST finds far more abnormal cycles and raises more false alarms.
+
+Nothing here went live. The slim model is published as an optional prerelease asset (`ast-slim-v1`) and the app can load it (`embedder` role in `app/inference.py`). A clear improvement probably needs AST fine-tuned end to end on a GPU, where published results reach 0.60 to 0.63.
 
 ## Caveats
 

@@ -21,7 +21,6 @@ from ml.ood import is_ood  # noqa: E402
 LOW_CONF = 0.6
 CYCLE_WIN = (3.0, 1.5)  # lung_sound was trained on single breath cycles, so score short windows
 MAX_EMBED_WINDOWS = 12  # AST costs ~0.7 s a window (int8, Apple M3 CPU), so long recordings are spread over 12
-AST_SR = 16000
 PRIMARY = {"heart": ("heart_abnormal", "abnormal"), "lung": ("lung_sound", "normal")}
 
 
@@ -80,11 +79,8 @@ class Analyzer:
         return self._summarize(self.heads[name], probs), probs
 
     def _embed_head(self, b, windows_):
-        from scipy.signal import resample_poly
-        from ml.ast_fbank import fbanks
-        from ml.run_lung_ast import fit_cycle
-        waves = [resample_poly(fit_cycle(w, SR), AST_SR // SR, 1) for w in windows_]
-        probs = b["model"].predict_proba(self.embedders[b["embed"]].run(None, {"fbank": fbanks(waves)})[0])
+        from ml.run_lung_ast import to_fbank
+        probs = b["model"].predict_proba(self.embedders[b["embed"]].run(None, {"fbank": to_fbank(windows_)})[0])
         return self._summarize(b, probs), probs
 
     @staticmethod

@@ -1,13 +1,19 @@
-"""Lung sounds with AudioSet-pretrained AST embeddings and a light head (ICBHI official split).
+"""Lung sounds with a slimmed AudioSet-pretrained AST (ICBHI official split), built to run fast on a CPU.
 
-Three stages, each in its own process (torch next to joblib/LightGBM segfaulted on this machine):
-  python -m ml.run_lung_ast prep  <data_dir> <out_dir>   # breath cycles at 4 kHz -> out/cycles.npz (no torch)
-  python -m ml.run_lung_ast embed <out_dir> [device]     # frozen AST embeddings -> out/emb.npz (torch only)
-  python -m ml.run_lung_ast head  <out_dir>              # choose head on train patients, score test once
+The full frozen AST scored 0.533 but cost 2.3 s per window. This version keeps the first 8 of 12 layers and
+reads 4 s of audio instead of 10.24 s (positional embeddings cropped to match), is quantised to int8, and its
+classifier head is trained on the int8 embeddings themselves, so serving sees exactly what training saw.
+
+Four stages, each in its own process (torch next to joblib/LightGBM segfaulted on this machine):
+  python -m ml.run_lung_ast prep   <data_dir> <out_dir>  # breath cycles at 4 kHz -> out/cycles.npz (no torch)
+  python -m ml.run_lung_ast export <out_dir>             # slim AST -> out/lung_sound_ast.onnx, int8 (torch only)
+  python -m ml.run_lung_ast embed  <out_dir>             # int8 embeddings -> out/emb.npz (onnxruntime only)
+  python -m ml.run_lung_ast head   <out_dir>             # choose head on train patients, score test once
 """
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -16,13 +22,22 @@ log = logging.getLogger("run_lung_ast")
 LABELS = ["both", "crackle", "normal", "wheeze"]
 AST_ID = "MIT/ast-finetuned-audioset-10-10-0.4593"
 AST_SR = 16000
-CYCLE_S = 8.0  # each cycle is repeat-padded to 8 s, as in the Patch-Mix ICBHI recipe
-LAYERS = (4, 8, 12)  # mean-pooled tokens from these hidden layers
+CYCLE_S = 4.0  # each cycle is repeat-padded (or cut) to 4 s
+MAX_FRAMES = 400  # fbank frames for 4 s at a 10 ms hop
+N_LAYERS = 8  # transformer layers kept out of 12
+LAYERS = (4, 8)  # mean-pooled tokens from these layers form the embedding
 
 
 def fit_cycle(seg, sr):
     """Repeat-pad (or cut) one breath cycle to CYCLE_S seconds."""
     return np.resize(np.asarray(seg, dtype=np.float32), int(CYCLE_S * sr))
+
+
+def to_fbank(waves_4k):
+    """4 kHz cycles -> AST input frames (n, MAX_FRAMES, 128)."""
+    from scipy.signal import resample_poly
+    from ml.ast_fbank import fbanks
+    return fbanks([resample_poly(fit_cycle(w, 4000), AST_SR // 4000, 1) for w in waves_4k], MAX_FRAMES)
 
 
 # ---------- stage 1: cycles (no torch) ----------
@@ -60,44 +75,68 @@ def prep(data, out):
     log.info("saved %d train / %d test cycles", len(parts["train"][0]), len(parts["test"][0]))
 
 
-# ---------- stage 2: embeddings (torch only) ----------
-def load_ast(device):
+# ---------- stage 2: slim AST -> int8 ONNX (torch only) ----------
+def slim_ast():
+    """The pretrained AST cut to N_LAYERS layers and MAX_FRAMES frames (positional embeddings cropped in time)."""
+    import copy
     import torch
-    from transformers import ASTFeatureExtractor, ASTModel
-    fe = ASTFeatureExtractor.from_pretrained(AST_ID)
-    model = ASTModel.from_pretrained(AST_ID, output_hidden_states=True).to(device).eval()
-    torch.set_grad_enabled(False)
-    return fe, model
+    from transformers import ASTModel
+    full = ASTModel.from_pretrained(AST_ID)
+    cfg = copy.deepcopy(full.config)
+    cfg.max_length, cfg.num_hidden_layers, cfg.output_hidden_states = MAX_FRAMES, N_LAYERS, True
+    small = ASTModel(cfg).eval()
+    sd = full.state_dict()
+    f = (cfg.num_mel_bins - cfg.patch_size) // cfg.frequency_stride + 1
+    t_full = (full.config.max_length - cfg.patch_size) // cfg.time_stride + 1
+    t = (MAX_FRAMES - cfg.patch_size) // cfg.time_stride + 1
+    pos = sd["embeddings.position_embeddings"]
+    sd["embeddings.position_embeddings"] = torch.cat(
+        [pos[:, :2], pos[:, 2:].reshape(1, f, t_full, -1)[:, :, :t].reshape(1, f * t, -1)], 1)
+    keep = small.state_dict().keys()
+    small.load_state_dict({k: v for k, v in sd.items() if k in keep}, strict=True)
+    return small
 
 
-def embed_batch(fe, model, waves_4k, device):
-    """waves_4k: list of float arrays at 4 kHz -> (n, 768 * len(LAYERS)) embeddings."""
+def export(out):
     import torch
-    from scipy.signal import resample_poly
-    waves = [resample_poly(w.astype(np.float32), AST_SR // 4000, 1) for w in waves_4k]
-    feats = fe(waves, sampling_rate=AST_SR, return_tensors="pt")["input_values"].to(device)
-    hs = model(feats).hidden_states
-    return torch.cat([hs[i][:, 2:].mean(1) for i in LAYERS], 1).float().cpu().numpy()
+    from onnxruntime.quantization import QuantType, quantize_dynamic
+    out = Path(out)
+    model = slim_ast()
+
+    class Emb(torch.nn.Module):
+        def __init__(self, m):
+            super().__init__()
+            self.m = m
+
+        def forward(self, x):
+            hs = self.m(x).hidden_states
+            return torch.cat([hs[i][:, 2:].mean(1) for i in LAYERS], 1)
+
+    fp32 = out / "ast_slim_fp32.onnx"
+    torch.onnx.export(Emb(model), (torch.zeros(2, MAX_FRAMES, 128),), str(fp32), input_names=["fbank"],
+                      output_names=["emb"], dynamic_axes={"fbank": {0: "n"}, "emb": {0: "n"}}, opset_version=17,
+                      dynamo=False)
+    quantize_dynamic(str(fp32), str(out / "lung_sound_ast.onnx"), weight_type=QuantType.QInt8, per_channel=True)
+    log.info("exported %s (%.0f MB)", out / "lung_sound_ast.onnx", (out / "lung_sound_ast.onnx").stat().st_size / 1e6)
 
 
-def embed(out, device="cpu", batch=16):
+# ---------- stage 3: int8 embeddings (onnxruntime only) ----------
+def embed(out, batch=16):
+    import onnxruntime as ort
     out = Path(out)
     d = np.load(out / "cycles.npz", allow_pickle=True)
-    fe, model = load_ast(device)
-    res = {}
+    sess = ort.InferenceSession(str(out / "lung_sound_ast.onnx"), providers=["CPUExecutionProvider"])
+    res, t0, n = {}, time.time(), 0
     for split in ("train", "test"):
         X = d[f"X{split}"]
-        chunks = []
-        for i in range(0, len(X), batch):
-            chunks.append(embed_batch(fe, model, list(X[i:i + batch]), device))
-            if (i // batch) % 40 == 0:
-                log.info("%s %d/%d", split, i, len(X))
-        res[f"E{split}"] = np.concatenate(chunks).astype(np.float32)
+        res[f"E{split}"] = np.concatenate([sess.run(None, {"fbank": to_fbank(X[i:i + batch])})[0]
+                                           for i in range(0, len(X), batch)]).astype(np.float32)
+        n += len(X)
+    log.info("embeddings %s, %.0f ms per cycle", {k: v.shape for k, v in res.items()}, (time.time() - t0) / n * 1000)
     np.savez(out / "emb.npz", **res)
-    log.info("embeddings %s", {k: v.shape for k, v in res.items()})
 
 
-# ---------- stage 3: head (no torch) ----------
+# ---------- stage 4: head (no torch) ----------
 def _heads():
     from lightgbm import LGBMClassifier
     from sklearn.linear_model import LogisticRegression
@@ -111,6 +150,7 @@ def _heads():
 
 
 def head(out):
+    import joblib
     from sklearn.model_selection import GroupShuffleSplit
     from ml.metrics import icbhi_score, report
     out = Path(out)
@@ -127,12 +167,13 @@ def head(out):
     model = _heads()[best]().fit(Etr, ytr)  # refit on all training patients, then touch the test set once
     pred = list(model.predict(Ete))
     r = report(list(yte), pred, LABELS) | {"icbhi": icbhi_score(list(yte), pred), "task": "lung_sound",
-                                            "model": f"AST ({AST_ID}) frozen embeddings + {best}", "val_scores": scores,
-                                            "n_test_cycles": len(yte), "n_test_patients": len(set(pte))}
+                                            "model": f"slim AST int8 ({N_LAYERS} layers, {CYCLE_S:g} s) + {best}",
+                                            "val_scores": scores, "n_test_cycles": len(yte), "n_test_patients": len(set(pte))}
     (out / "lung_sound_ast_metrics.json").write_text(json.dumps(r, indent=2, default=float))
-    import joblib
     joblib.dump({"model": model, "labels": list(model.classes_), "kind": "lung", "threshold": None, "positive": None,
-                 "trained_on": "icbhi", "embedding": AST_ID, "layers": list(LAYERS)}, out / "lung_sound_ast_head.joblib")
+                 "trained_on": "icbhi"}, out / "lung_sound_ast.head")
+    (out / "lung_sound_ast.onnx.json").write_text(json.dumps({"role": "embedder", "for": "lung_sound",
+                                                               "head": "lung_sound_ast.head"}))
     log.info("TEST ICBHI %s", r["icbhi"])
     return r
 
@@ -140,9 +181,4 @@ def head(out):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     stage, args = sys.argv[1], sys.argv[2:]
-    if stage == "prep":
-        prep(*args)
-    elif stage == "embed":
-        embed(args[0], args[1] if len(args) > 1 else "cpu")
-    else:
-        head(args[0])
+    {"prep": prep, "export": export, "embed": embed, "head": head}[stage](*args)

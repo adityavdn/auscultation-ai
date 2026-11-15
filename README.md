@@ -71,7 +71,7 @@ Every test set is held out **by patient** wherever the dataset publishes patient
 
 Live check: 32 of 34 held-out samples served by the deployed app matched their dataset label, with a median reply of 1.6 s.
 
-The lung sound model is the weak spot. An ImageNet EfficientNet-B0 scored 0.510 and a 50/50 ensemble 0.511. Frozen AudioSet AST embeddings with a logistic-regression head reached **0.533** (sensitivity 0.50, specificity 0.56), the best so far, but it needs about 0.7 to 2.3 s per window on a CPU, so it is built in and switched off until it can run on faster hardware. Full numbers and confusion matrices are in [`reports/results.md`](reports/results.md).
+The lung sound model is the weak spot. An ImageNet EfficientNet-B0 scored 0.510 and a 50/50 ensemble 0.511. AudioSet AST embeddings reached 0.533 (full model) and 0.519 (a slim int8 version that runs in about 70 ms a window). A patient-level bootstrap shows these gains are within noise for a 49-patient test set, so the live app keeps LightGBM; the slim model is an optional release asset. Full numbers and confusion matrices are in [`reports/results.md`](reports/results.md).
 
 <img src="docs/figures/fig-training.png" alt="Training pipeline: public datasets, label grouping, patient-wise split, features, LightGBM, held-out test, public release" width="100%">
 

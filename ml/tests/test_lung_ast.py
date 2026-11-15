@@ -19,12 +19,15 @@ def test_long_cycle_is_cut_to_fixed_length():
 
 
 @pytest.mark.skipif(os.environ.get("RUN_TORCH_TESTS") != "1", reason="downloads AST weights; set RUN_TORCH_TESTS=1")
-def test_embedding_has_one_768_block_per_layer():
-    from ml.run_lung_ast import embed_batch, load_ast
-    fe, model = load_ast("cpu")
-    e = embed_batch(fe, model, [np.random.default_rng(0).normal(0, 0.1, 32000).astype(np.float32)] * 2, "cpu")
-    assert e.shape == (2, 768 * len(LAYERS))
-    assert np.isfinite(e).all()
+def test_slim_ast_keeps_pretrained_weights_and_reads_short_input():
+    import torch
+    from transformers import ASTModel
+    from ml.run_lung_ast import AST_ID, MAX_FRAMES, N_LAYERS, slim_ast
+    small, full = slim_ast(), ASTModel.from_pretrained(AST_ID)
+    assert small.config.num_hidden_layers == N_LAYERS
+    assert torch.equal(small.encoder.layer[0].attention.attention.query.weight, full.encoder.layer[0].attention.attention.query.weight)
+    out = small(torch.zeros(1, MAX_FRAMES, 128)).hidden_states
+    assert len(out) == N_LAYERS + 1 and out[LAYERS[-1]].shape[-1] == 768
 
 
 @pytest.mark.skipif(os.environ.get("RUN_TORCH_TESTS") != "1", reason="compares against the torch-based extractor")
