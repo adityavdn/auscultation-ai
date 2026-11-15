@@ -6,7 +6,7 @@
 
 AI analysis of heart and lung stethoscope sounds, a patient intake chat, and a doctor inbox, built only on public data and free infrastructure.
 
-[**Live demo**](https://auscultation-ai.vercel.app) · [How it works](#how-it-works) · [Results](#results) · [Run it locally](#run-it-locally) · [Roadmap](#roadmap)
+[**Live demo**](https://auscultation-ai.vercel.app) · [IEEE report (PDF)](docs/report/report.pdf) · [How it works](#how-it-works) · [Results](#results) · [Run it locally](#run-it-locally) · [Roadmap](#roadmap)
 
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.162-009688?logo=fastapi&logoColor=white)
@@ -138,6 +138,7 @@ app/            FastAPI server, analyzer, fusion rules, intake agent, SQLite inb
 app/static/     phone web app: 3D heart and lungs background, GSAP + Lenis motion, figures
 ml/             audio checks, features, dataset loaders, training, OOD gate, CNN experiment
 docs/figures/   report diagrams (build.py renders them)
+docs/report/    IEEE-format report: LaTeX source and PDF
 reports/        held-out results
 Dockerfile      production image, pulls the pinned model release
 ```
