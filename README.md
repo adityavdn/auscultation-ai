@@ -8,6 +8,7 @@ AI analysis of heart and lung stethoscope sounds, a patient intake chat, and a d
 
 [**Live demo**](https://auscultation-ai.vercel.app) · [IEEE report (PDF)](docs/report/report.pdf) · [How it works](#how-it-works) · [Results](#results) · [Run it locally](#run-it-locally) · [Roadmap](#roadmap)
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adityavdn/auscultation-ai/blob/main/notebooks/reproduce_results.ipynb)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.162-009688?logo=fastapi&logoColor=white)
 ![LightGBM](https://img.shields.io/badge/models-LightGBM-2e7d32)
@@ -108,6 +109,8 @@ Open http://localhost:7860. Interactive API docs are at `/docs`. Or build the sa
 docker build -t auscultation-ai . && docker run -p 7860:7860 -e DOCTOR_PASSCODE=change-me auscultation-ai
 ```
 
+To reproduce the headline results without installing anything, open [`notebooks/reproduce_results.ipynb`](notebooks/reproduce_results.ipynb) in Google Colab (badge above): it downloads the published models and re-runs the 34-sample check.
+
 Run the tests with `pytest`. The torch tests for the CNN experiment are skipped unless `RUN_TORCH_TESTS=1`.
 
 ### API
@@ -139,6 +142,7 @@ app/static/     phone web app: 3D heart and lungs background, GSAP + Lenis motio
 ml/             audio checks, features, dataset loaders, training, OOD gate, CNN experiment
 docs/figures/   report diagrams (build.py renders them)
 docs/report/    IEEE-format report: LaTeX source and PDF
+notebooks/      Colab notebook that reproduces the results from the published models
 reports/        held-out results
 Dockerfile      production image, pulls the pinned model release
 ```
